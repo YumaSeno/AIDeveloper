@@ -4,14 +4,18 @@ services:
       context: ..
       dockerfile: .devcontainer/Dockerfile
       args:
-          CONTAINER_USER: vscode
-          CONTAINER_WORKDIR: /workspace
+        CONTAINER_USER: vscode
+        CONTAINER_WORKDIR: /workspace
     network_mode: "host"
     volumes:
       - ..:/workspace
     env_file:
       - ../.env
-    # コンテナを起動し続けるためのコマンド
-    command: tail -f /dev/null
+    command: >
+      /bin/sh -c '
+      sudo service docker start &&
+      /bin/bash
+      '
     tty: true
     stdin_open: true
+    privileged: true
