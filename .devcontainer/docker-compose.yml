@@ -1,0 +1,17 @@
+services:
+  ai_developer_ts:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      args:
+          CONTAINER_USER: vscode
+          CONTAINER_WORKDIR: /workspace
+    network_mode: "host"
+    volumes:
+      - ..:/workspace
+    env_file:
+      - ../.env
+    # コンテナを起動し続けるためのコマンド
+    command: tail -f /dev/null
+    tty: true
+    stdin_open: true
