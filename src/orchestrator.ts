@@ -1,16 +1,16 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { Agent } from "./agents/Agent";
 import { PMAgent } from "./agents/PMAgent";
 import { UserAgent } from "./agents/UserAgent";
 import { AIAgent } from "./agents/AIAgent";
 import { Logger } from "./core/Logger";
 import { Workspace } from "./core/Workspace";
-import { FileReaderTool } from "./tools/FileReaderTool";
 import { Tool } from "./tools/Tool";
 import { CommandLineUI } from "./ui";
 import { TurnOutput, ToolResult, PlanProjectAndKickoffSchema } from "./models";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { Tools } from "./tools/Tools";
 
 const META_DIR = "_meta";
 const PLAN_FILE = "01_project_plan.json";
@@ -20,7 +20,7 @@ export class Orchestrator {
   private workspace!: Workspace;
   private logger!: Logger;
   private agents: Record<string, Agent> = {};
-  private tools: Record<string, Tool> = {};
+  private tools: Record<string, Tool> = Tools;
 
   constructor(ui: CommandLineUI) {
     this.ui = ui;
@@ -28,7 +28,7 @@ export class Orchestrator {
 
   private async _setupProject(
     projectName: string,
-    client: GoogleGenerativeAI,
+    client: GoogleGenAI,
     model_name: string,
     resume = false
   ): Promise<string> {
@@ -41,7 +41,6 @@ export class Orchestrator {
     await fs.mkdir(metaDir, { recursive: true });
     this.logger = new Logger(metaDir, resume ? "a" : "w");
 
-    this.tools = { [new FileReaderTool().name]: new FileReaderTool() };
     this.agents = {
       PM: new PMAgent(client, "PM", model_name),
       USER: new UserAgent("USER", this.ui),
@@ -56,11 +55,11 @@ export class Orchestrator {
         await fs.access(planPath);
         const planData = await fs.readFile(planPath, "utf-8");
         const plan = PlanProjectAndKickoffSchema.parse(JSON.parse(planData));
-        for (const [name, info] of Object.entries(plan.team)) {
-          if (!this.agents[name]) {
-            this.agents[name] = new AIAgent(
+        for (const info of Object.values(plan.team)) {
+          if (!this.agents[info.name]) {
+            this.agents[info.name] = new AIAgent(
               client,
-              name,
+              info.name,
               info.role,
               info.project_role,
               model_name
@@ -95,15 +94,14 @@ export class Orchestrator {
       return "PM";
     } else {
       const firstTurn: TurnOutput = {
-        sender: "System",
+        sender: "",
         recipient: "PM",
         message:
           "プロジェクトを開始します。まずはUSERにヒアリングしてください。",
         thought: "プロジェクト開始のトリガー",
         target_type: "AGENT",
         tool_args: {},
-        artifacts: [],
-        special_action: "",
+        special_action: "_",
       };
       await this.logger.log(firstTurn);
       this.ui.displayMessage(firstTurn);
@@ -115,17 +113,16 @@ export class Orchestrator {
         thought: "ユーザへの最初の聞き取り",
         target_type: "AGENT",
         tool_args: {},
-        artifacts: [],
-        special_action: "",
+        special_action: "_",
       };
       await this.logger.log(secondTurn);
       this.ui.displayMessage(secondTurn);
-      return "PM";
+      return "USER";
     }
   }
 
   async setupNewProject(
-    client: GoogleGenerativeAI,
+    client: GoogleGenAI,
     model_name: string
   ): Promise<string> {
     const projectName = await this.ui.getUserInput(
@@ -135,7 +132,7 @@ export class Orchestrator {
   }
 
   async setupResumeProject(
-    client: GoogleGenerativeAI,
+    client: GoogleGenAI,
     model_name: string
   ): Promise<string> {
     const projectName = await this.ui.getUserInput(
@@ -145,7 +142,7 @@ export class Orchestrator {
   }
 
   async run(
-    client: GoogleGenerativeAI,
+    client: GoogleGenAI,
     nextSpeakerName: string,
     model_name: string
   ): Promise<void> {
@@ -174,7 +171,8 @@ export class Orchestrator {
       const responseTurn = await currentAgent.executeTurn(
         personalHistory,
         fileTree,
-        this.tools
+        this.tools,
+        Object.values(this.agents)
       );
       responseTurn.sender = currentAgent.name;
       await this.logger.log(responseTurn);
@@ -199,7 +197,7 @@ export class Orchestrator {
 
   private async _executeTool(
     toolName: string,
-    toolArgs: Record<string, Record<string, any>>
+    toolArgs: any | undefined
   ): Promise<ToolResult> {
     const tool = this.tools[toolName];
     if (!tool)
@@ -207,24 +205,22 @@ export class Orchestrator {
         tool_name: toolName,
         result: `エラー: ツール '${toolName}' が見つかりません。`,
         error: true,
-        sender: "System",
       };
 
     try {
       const result = await tool.execute(toolArgs, this.workspace);
-      return { tool_name: toolName, result, error: false, sender: "System" };
+      return { tool_name: toolName, result, error: false };
     } catch (e) {
       return {
         tool_name: toolName,
         result: `エラー: ${e}`,
         error: true,
-        sender: "System",
       };
     }
   }
 
   private async _handleFinalizeRequirements(
-    client: GoogleGenerativeAI,
+    client: GoogleGenAI,
     model_name: string
   ): Promise<string> {
     this.ui.printHeader("Phase 2: チーム編成とキックオフ", "-");
@@ -232,19 +228,25 @@ export class Orchestrator {
     if (!(pm instanceof PMAgent)) throw new Error("PMAgentが見つかりません。");
 
     this.ui.displayStatus("🤔 PMがプロジェクト計画を策定中...");
-    const plan = await pm.planProjectKickoff(this.logger);
-
-    const planPath = path.join(this.workspace.projectPath, META_DIR, PLAN_FILE);
-    await fs.writeFile(planPath, JSON.stringify(plan, null, 2));
-    this.ui.displayStatus(
-      `✅ プロジェクト計画を '${planPath}' に保存しました。`
+    const plan = await pm.planProjectKickoff(
+      this.logger,
+      Object.values(this.agents)
     );
 
-    for (const [name, info] of Object.entries(plan.team)) {
-      if (!this.agents[name]) {
-        this.agents[name] = new AIAgent(
+    await this.workspace.saveArtifact(
+      PLAN_FILE,
+      JSON.stringify(plan, null, 2),
+      META_DIR
+    );
+    this.ui.displayStatus(
+      `✅ プロジェクト計画を '${PLAN_FILE}' に保存しました。`
+    );
+
+    for (const info of plan.team) {
+      if (!this.agents[info.name]) {
+        this.agents[info.name] = new AIAgent(
           client,
-          name,
+          info.name,
           info.role,
           info.project_role,
           model_name
@@ -264,8 +266,7 @@ export class Orchestrator {
       thought: plan.thought,
       target_type: "AGENT",
       tool_args: {},
-      artifacts: [],
-      special_action: "",
+      special_action: "_",
     };
     await this.logger.log(broadcastTurn);
     this.ui.displayMessage(broadcastTurn);
@@ -276,8 +277,7 @@ export class Orchestrator {
       thought: "最初のタスク指示",
       target_type: "AGENT",
       tool_args: {},
-      artifacts: [],
-      special_action: "",
+      special_action: "_",
     };
     await this.logger.log(firstDirectiveTurn);
     this.ui.displayMessage(firstDirectiveTurn);

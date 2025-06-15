@@ -23,7 +23,7 @@ export class Logger {
 
   async log(turnObject: TurnOutput | ToolResult): Promise<void> {
     this.inMemoryLog.push(turnObject);
-    const logType = turnObject.sender === "System" ? "tool_result" : "turn";
+    const logType = "recipient" in turnObject ? "turn" : "tool_result";
     const logEntry = { log_type: logType, data: turnObject };
     const line = JSON.stringify(logEntry) + "\n";
     await fs.appendFile(this.logFilePath, line, "utf-8");

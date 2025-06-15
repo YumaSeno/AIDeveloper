@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import * as dotenv from "dotenv";
 import { Orchestrator } from "./orchestrator";
 import { CommandLineUI } from "./ui";
@@ -20,7 +20,7 @@ async function main() {
     return;
   }
 
-  const client = new GoogleGenerativeAI(apiKey);
+  const client = new GoogleGenAI({ apiKey: apiKey });
   const ui = new CommandLineUI();
   const orchestrator = new Orchestrator(ui);
 

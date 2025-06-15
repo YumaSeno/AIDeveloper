@@ -1,62 +1,36 @@
-import { AIAgent } from "./AIAgent";
-import {
-  TurnOutput,
-  TurnOutputSchema,
-  PlanProjectAndKickoff,
-  PlanProjectAndKickoffSchema,
-  ToolResult,
-} from "../models";
-import { Logger } from "../core/Logger";
-import { Tool } from "../tools/Tool";
-import { GoogleGenAI } from "@google/genai";
-import { Agent } from "./Agent";
-
-export class PMAgent extends AIAgent {
-  constructor(client: GoogleGenAI, name: string, modelName: string) {
-    super(
-      client,
-      name,
-      "PM",
-      `プロジェクトの全体管理と進行、要件定義とチーム編成を行います。
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PMAgent = void 0;
+const AIAgent_1 = require("./AIAgent");
+const models_1 = require("../models");
+class PMAgent extends AIAgent_1.AIAgent {
+    constructor(client, name, modelName) {
+        super(client, name, "PM", `プロジェクトの全体管理と進行、要件定義とチーム編成を行います。
       PMはクライアントの要望を満たすシステムを作成するために全力を尽くし、全ての成果物とREADMEなどの手順書を生成するまで作業を全うします。
       製造の中での成果物のレビューを行い、改善すべき点については細かい内容でも積極的に指摘を行います。
-      また、不明点があればPMを通してユーザに確認を行います。`,
-      modelName
-    );
-  }
-
-  async executeTurn(
-    personalHistory: (TurnOutput | ToolResult)[],
-    fileTree: string,
-    tools: Record<string, Tool>,
-    team: Agent[]
-  ): Promise<TurnOutput> {
-    let isDevPhase = false;
-    for (const turn of personalHistory) {
-      if (
-        "special_action" in turn &&
-        turn.special_action == "FINALIZE_REQUIREMENTS"
-      )
-        isDevPhase = true;
+      また、不明点があればPMを通してユーザに確認を行います。`, modelName);
     }
-
-    if (isDevPhase) {
-      return super.executeTurn(personalHistory, fileTree, tools, team);
-    } else {
-      return this._executeRequirementsGathering(personalHistory, tools);
+    async executeTurn(personalHistory, fileTree, tools, team) {
+        let isDevPhase = false;
+        for (const turn of personalHistory) {
+            if ("special_action" in turn &&
+                turn.special_action == "FINALIZE_REQUIREMENTS")
+                isDevPhase = true;
+        }
+        if (isDevPhase) {
+            return super.executeTurn(personalHistory, fileTree, tools, team);
+        }
+        else {
+            return this._executeRequirementsGathering(personalHistory, tools);
+        }
     }
-  }
-
-  private async _executeRequirementsGathering(
-    personalHistory: (TurnOutput | ToolResult)[],
-    tools: Record<string, Tool>
-  ): Promise<TurnOutput> {
-    const toolDescriptions = Object.keys(tools).map((k) => ({
-      name: k,
-      description: tools[k].getDescriptionDict(),
-    }));
-    const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
-    const prompt = `あなたは優秀なプロジェクトマネージャーです。現在、クライアントと1対1で要件定義を行っています。
+    async _executeRequirementsGathering(personalHistory, tools) {
+        const toolDescriptions = Object.keys(tools).map((k) => ({
+            name: k,
+            description: tools[k].getDescriptionDict(),
+        }));
+        const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
+        const prompt = `あなたは優秀なプロジェクトマネージャーです。現在、クライアントと1対1で要件定義を行っています。
 
 【あなたのタスク】
 以下のクライアントとの対話履歴を元に、次のアクションを決定してください。
@@ -72,19 +46,14 @@ ${JSON.stringify(toolDescriptions, null, 2)}
 ${JSON.stringify(historyForPrompt, null, 2)}
 
 【出力形式】
-${JSON.stringify(TurnOutputSchema.shape, null, 2)}
+${JSON.stringify(models_1.TurnOutputSchema.shape, null, 2)}
 `;
-    return this._executeJson(prompt, TurnOutputSchema);
-  }
-
-  async planProjectKickoff(
-    logger: Logger,
-    team: Agent[]
-  ): Promise<PlanProjectAndKickoff> {
-    const fullHistory = logger.getFullHistory();
-    const historyForPrompt = fullHistory.map((turn) => ({ ...turn }));
-
-    const prompt = `あなたは卓越したPMです。要件定義が完了しました。
+        return this._executeJson(prompt, models_1.TurnOutputSchema);
+    }
+    async planProjectKickoff(logger, team) {
+        const fullHistory = logger.getFullHistory();
+        const historyForPrompt = fullHistory.map((turn) => ({ ...turn }));
+        const prompt = `あなたは卓越したPMです。要件定義が完了しました。
 以下の対話履歴全体をレビューし、このプロジェクトを遂行するための計画を立ててください。
 
 【あなたのタスク】
@@ -99,8 +68,9 @@ ${JSON.stringify(team, null, 2)}
 ${JSON.stringify(historyForPrompt, null, 2)}
 
 【出力形式】
-${JSON.stringify(PlanProjectAndKickoffSchema.shape, null, 2)}
+${JSON.stringify(models_1.PlanProjectAndKickoffSchema.shape, null, 2)}
 `;
-    return this._executeJson(prompt, PlanProjectAndKickoffSchema);
-  }
+        return this._executeJson(prompt, models_1.PlanProjectAndKickoffSchema);
+    }
 }
+exports.PMAgent = PMAgent;

@@ -17,7 +17,10 @@ export class UserAgent extends Agent {
   }
 
   async executeTurn(
-    personalHistory: (TurnOutput | ToolResult)[]
+    personalHistory: (TurnOutput | ToolResult)[],
+    fileTree: string,
+    tools: Record<string, Tool>,
+    team: Agent[]
   ): Promise<TurnOutput> {
     const lastTurn =
       personalHistory.length > 0
@@ -32,10 +35,9 @@ export class UserAgent extends Agent {
       recipient: recipient,
       message: userInput,
       thought: "（ユーザーの思考は直接入力された）",
-      artifacts: [],
-      special_action: "",
       sender: this.name,
       tool_args: {},
+      special_action: "_",
     };
   }
 }

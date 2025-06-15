@@ -1,31 +1,58 @@
-import { z } from 'zod';
+import { z } from "zod";
+import { ToolArgsSchema } from "./tools/Tools";
 
 export const TurnOutputSchema = z.object({
-  target_type: z.enum(["AGENT", "TOOL"]).describe("次のアクションの対象がエージェントかツールか。"),
-  recipient: z.string().describe("アクションの対象となるエージェント名またはツール名。"),
-  tool_args: z.record(z.any()).default({}).describe("対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。"),
-  message: z.string().default("").describe("対象がエージェントの場合に送信するメッセージ。"),
-  artifacts: z.array(z.object({
-    filename: z.string(),
-    content: z.string()
-  })).default([]).describe("ファイルとして成果物を出力する場合に指定。'filename'と'content'の辞書のリスト。"),
-  special_action: z.enum(["", "FINALIZE_REQUIREMENTS", "COMPLETE_PROJECT"]).default("").describe("プロジェクト進行に関わる特別なアクション。"),
+  sender: z
+    .string()
+    .default("")
+    .describe(
+      "この出力の送信元エージェント名。Orchestratorによって設定される。"
+    ),
+  target_type: z
+    .enum(["AGENT", "TOOL"])
+    .describe("次のアクションの対象がエージェントかツールか。"),
+  recipient: z
+    .string()
+    .describe("アクションの対象となるエージェント名またはツール名。"),
+  special_action: z
+    .enum(["_", "FINALIZE_REQUIREMENTS", "COMPLETE_PROJECT"])
+    .describe("プロジェクト進行に関わる特別なアクション。通常は未設定。"),
+  message: z
+    .string()
+    .default("")
+    .describe(
+      "対象がエージェントの場合に送信するメッセージ。ツール利用時は設定不要。"
+    )
+    .optional(),
+  tool_args: ToolArgsSchema.describe(
+    "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は空で設定。"
+  ),
   thought: z.string().describe("なぜこの行動を選択したかの思考プロセス。"),
-  sender: z.string().default("").describe("この出力の送信元エージェント名。Orchestratorによって設定される。"),
 });
 export type TurnOutput = z.infer<typeof TurnOutputSchema>;
 
 export const ToolResultSchema = z.object({
   tool_name: z.string().describe("実行されたツールの名前。"),
-  result: z.any().describe("ツール実行の結果。成功時はツール固有の出力、失敗時はエラーメッセージ。"),
-  error: z.boolean().default(false).describe("ツールの実行中にエラーが発生したかどうかを示すフラグ。"),
-  sender: z.string().default("System").describe("ツールの実行主体。通常は'System'。"),
+  result: z
+    .any()
+    .describe(
+      "ツール実行の結果。成功時はツール固有の出力、失敗時はエラーメッセージ。"
+    ),
+  error: z
+    .boolean()
+    .default(false)
+    .describe("ツールの実行中にエラーが発生したかどうかを示すフラグ。"),
 });
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
 export const AgentExplanationSchema = z.object({
-  role: z.string().describe("エージェントの一般的な役割（例：'バックエンド開発者'）。"),
-  project_role: z.string().describe("このプロジェクトにおける、エージェントの具体的な役割と責任。"),
+  name: z.string().describe("エージェントの名前。"),
+  role: z
+    .string()
+    .describe("エージェントの一般的な役割（例：'バックエンド開発者'）。"),
+  project_role: z
+    .string()
+    .describe("このプロジェクトにおける、エージェントの具体的な役割と責任。"),
 });
 export type AgentExplanation = z.infer<typeof AgentExplanationSchema>;
 
@@ -36,9 +63,19 @@ export const FirstDirectiveSchema = z.object({
 export type FirstDirective = z.infer<typeof FirstDirectiveSchema>;
 
 export const PlanProjectAndKickoffSchema = z.object({
-  thought: z.string().describe("なぜこの計画（チーム編成、最初の指示）を立てたかの思考プロセス。"),
-  team: z.record(AgentExplanationSchema).describe("このプロジェクトのために編成する追加のチームメンバー。キーはエージェント名。"),
-  broadcast_message: z.string().describe("編成されたチーム全体に送る、プロジェクト開始のキックオフメッセージ。"),
+  team: z
+    .array(AgentExplanationSchema)
+    .describe("このプロジェクトのために編成する追加のチームメンバー。"),
+  broadcast_message: z
+    .string()
+    .describe(
+      "編成されたチーム全体に送る、プロジェクト開始のキックオフメッセージ。"
+    ),
   first_directive: FirstDirectiveSchema.describe("最初のタスク指示。"),
+  thought: z
+    .string()
+    .describe(
+      "なぜこの計画（チーム編成、最初の指示）を立てたかの思考プロセス。"
+    ),
 });
 export type PlanProjectAndKickoff = z.infer<typeof PlanProjectAndKickoffSchema>;

@@ -15,6 +15,7 @@ export abstract class Agent {
   abstract executeTurn(
     personalHistory: (TurnOutput | ToolResult)[],
     fileTree: string,
-    tools: Record<string, Tool>
+    tools: Record<string, Tool>,
+    team: Agent[]
   ): Promise<TurnOutput>;
 }

@@ -24,22 +24,28 @@ export class CommandLineUI {
       );
     } else if ("recipient" in turnObject) {
       // TurnOutput
-      const thought = turnObject.thought
-        ? `\n  🤔 Thought: ${turnObject.thought}`
-        : "";
       console.log(
-        `${ts} 💬 ${turnObject.sender} -> ${turnObject.recipient}:${thought}`
+        `${ts} 💬 ${turnObject.sender} -> ${turnObject.recipient} (${turnObject.target_type})`
       );
+      if (turnObject.target_type === "TOOL") {
+        console.log(`  ${turnObject.tool_args}`);
+      }
       if (turnObject.message) {
         console.log(`  ${turnObject.message}`);
       }
     } else {
       console.log(`${ts} ℹ️  System: ${JSON.stringify(turnObject)}`);
     }
+    console.log(``);
   }
 
   async getUserInput(prompt = ""): Promise<string> {
-    return this.rl.question(prompt);
+    const answer = await this.rl.question(prompt);
+    if (prompt == "> ") {
+      process.stdout.moveCursor(0, -1);
+      process.stdout.clearLine(1);
+    }
+    return answer;
   }
 
   displayStatus(message: string): void {
