@@ -27,6 +27,7 @@ export class PMAgent extends AIAgent {
 
   async executeTurn(
     personalHistory: (TurnOutput | ToolResult)[],
+    project_name: string,
     fileTree: string,
     tools: Record<string, Tool>,
     team: Agent[]
@@ -41,29 +42,48 @@ export class PMAgent extends AIAgent {
     }
 
     if (isDevPhase) {
-      return super.executeTurn(personalHistory, fileTree, tools, team);
+      return super.executeTurn(
+        personalHistory,
+        project_name,
+        fileTree,
+        tools,
+        team
+      );
     } else {
-      return this._executeRequirementsGathering(personalHistory, tools);
+      return this._executeRequirementsGathering(
+        personalHistory,
+        project_name,
+        fileTree,
+        tools
+      );
     }
   }
 
   private async _executeRequirementsGathering(
     personalHistory: (TurnOutput | ToolResult)[],
+    project_name: string,
+    fileTree: string,
     tools: Record<string, Tool>
   ): Promise<TurnOutput> {
     const toolDescriptions = Object.keys(tools).map((k) => ({
       name: k,
-      description: tools[k].getDescriptionDict(),
+      description: tools[k].getDescription(),
     }));
     const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
     const prompt = `あなたは優秀なプロジェクトマネージャーです。現在、クライアントと1対1で要件定義を行っています。
+あなたは実際にプロジェクトマネージャーとしての業務を行います。
+仮想のミーティングの予定を組む、ファイルを作成していないのに確認を求めるなどの開発者を演じる行動は取らないで下さい。
+常に実際に必要な行動を取って下さい。
 
 【あなたのタスク】
 以下のクライアントとの対話履歴を元に、次のアクションを決定してください。
 - **ヒアリング**: 要件が曖昧な点や不足があれば、クライアント（USER）に質問してください。
 - **ツールを利用する**: \`target_type\`を"TOOL"に設定し、\`recipient\`に対象ツール名、\`tool_args\`を記述。
-- **要件定義の最終確認**: 要件が十分集まったと判断すれば、要件定義書や画面一覧などユーザがシステムの全容をイメージできるような初期資料を出力し、\`MESSAGE\`で要件定義を完了しても良いか、改善点や他に定義する必要のある内容はないかを確認してください。
+- **要件定義の最終確認**: 要件が十分集まったと判断すれば、要件定義書や画面一覧などユーザがシステムの全容をイメージできるような初期資料をツールを利用して出力し、\`MESSAGE\`で要件定義を完了しても良いか、改善点や他に定義する必要のある内容はないかを確認してください。
 - **要件定義の完了**: 要件が十分に集まりユーザが要件定義の完了に同意したら、\`special_action\`に"FINALIZE_REQUIREMENTS"を設定してヒアリングを完了し、初期ドキュメント一式を生成してください。
+
+【プロジェクト名】
+${project_name}
 
 【利用可能なツール一覧】
 ${JSON.stringify(toolDescriptions, null, 2)}
@@ -71,8 +91,8 @@ ${JSON.stringify(toolDescriptions, null, 2)}
 【送受信メッセージ履歴】
 ${JSON.stringify(historyForPrompt, null, 2)}
 
-【出力形式】
-${JSON.stringify(TurnOutputSchema.shape, null, 2)}
+【現在のプロジェクトファイル一覧】
+${fileTree}
 `;
     return this._executeJson(prompt, TurnOutputSchema);
   }

@@ -16,6 +16,7 @@ const META_DIR = "_meta";
 const PLAN_FILE = "01_project_plan.json";
 
 export class Orchestrator {
+  private projectName!: string;
   private ui: CommandLineUI;
   private workspace!: Workspace;
   private logger!: Logger;
@@ -32,6 +33,7 @@ export class Orchestrator {
     model_name: string,
     resume = false
   ): Promise<string> {
+    this.projectName = projectName;
     this.workspace = new Workspace(
       projectName || `autogen_project_${Date.now()}`
     );
@@ -170,6 +172,7 @@ export class Orchestrator {
 
       const responseTurn = await currentAgent.executeTurn(
         personalHistory,
+        this.projectName,
         fileTree,
         this.tools,
         Object.values(this.agents)

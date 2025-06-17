@@ -18,6 +18,7 @@ export class UserAgent extends Agent {
 
   async executeTurn(
     personalHistory: (TurnOutput | ToolResult)[],
+    project_name: string,
     fileTree: string,
     tools: Record<string, Tool>,
     team: Agent[]

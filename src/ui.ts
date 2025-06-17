@@ -41,10 +41,6 @@ export class CommandLineUI {
 
   async getUserInput(prompt = ""): Promise<string> {
     const answer = await this.rl.question(prompt);
-    if (prompt == "> ") {
-      process.stdout.moveCursor(0, -1);
-      process.stdout.clearLine(1);
-    }
     return answer;
   }
 

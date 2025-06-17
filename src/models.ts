@@ -21,7 +21,7 @@ export const TurnOutputSchema = z.object({
     .string()
     .default("")
     .describe(
-      "対象がエージェントの場合に送信するメッセージ。ツール利用時は設定不要。"
+      "対象がエージェントの場合に送信するメッセージ。対象がツールの場合は設定しない。"
     )
     .optional(),
   tool_args: ToolArgsSchema.describe(

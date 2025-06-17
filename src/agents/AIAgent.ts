@@ -71,13 +71,14 @@ export class AIAgent extends Agent {
 
   async executeTurn(
     personalHistory: (TurnOutput | ToolResult)[],
+    project_name: string,
     fileTree: string,
     tools: Record<string, Tool>,
     team: Agent[]
   ): Promise<TurnOutput> {
     const toolDescriptions = Object.keys(tools).map((k) => ({
       name: k,
-      description: tools[k].getDescriptionDict(),
+      description: tools[k].getDescription(),
     }));
     const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
 
@@ -87,10 +88,15 @@ export class AIAgent extends Agent {
 
 あなたはプロジェクト全体の会話ログを見ることはできません。判断材料は、あなた自身の過去のやり取りと、現在のファイル状況のみです。
 このチームのメンバはUSERを除いて全員AIで構成されており、人間のチームによる開発とは特性が大きく異なります。
-仮想のミーティングの予定を作成するなど、このチームの開発に必要のない行動は取らないで下さい。
-繰り返しますが、このチームのメンバは全員AIで構成されており、システムの実態的な完成を目的としています。
-人間のシステム開発チームを演じるのではなく、実際に必要なメッセージ・行動を取って下さい。
+仮想のミーティングのスケジュールを組む、実際に行われていないテストについてのテスト結果を報告する、ファイルを作成していないのに確認を求めるなど、このチームの開発に必要のない行動は取らないで下さい。
+特定の一人に対してのみ指示・質問を行い、それを相互に繰り返すことで開発を進めて行きます。並行して指示をしたり、作業を進めたりすることはできません。
+"ALL"などで全員に周知を行う言動は行わないで下さい。
+繰り返しますが、このチームのメンバは全員AIで構成されており、システムの本質的な完成を目的としています。
+人間のシステム開発チームを演じるのではなく、常に実際に必要な行動を取って下さい。
 また、必要であればPMに確認の上ユーザーに質問・確認を行い、最終的なシステムの完成度が高くなることを目標として下さい。
+
+【プロジェクト名】
+${project_name}
 
 【利用可能なツール一覧】
 ${JSON.stringify(toolDescriptions, null, 2)}
@@ -110,10 +116,6 @@ ${fileTree}
 1. **他のエージェントと対話する**: \`target_type\`を"AGENT"に設定し、\`recipient\`に対象エージェント名、\`message\`を記述。
 2. **ツールを利用する**: \`target_type\`を"TOOL"に設定し、\`recipient\`に対象ツール名、\`tool_args\`を記述。
 3. **プロジェクト完了**: PMがシステムの製造が完了したと判断した場合のみ、\`special_action\`に"COMPLETE_PROJECT"を設定。
-
-【出力形式】
-必ずJSON形式で、以下のスキーマに従って出力してください。
-${JSON.stringify(TurnOutputSchema.shape, null, 2)}
 `;
     return this._executeJson(prompt, TurnOutputSchema);
   }

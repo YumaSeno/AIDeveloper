@@ -11,16 +11,14 @@ export type FileReaderArgs = z.infer<typeof FileReaderArgsSchema>;
 export class FileReaderTool extends Tool {
   readonly description =
     "指定された複数のファイルの内容を読み込み、その内容を返します。";
-  readonly args_schema = {
-    filenames: "string[] (読み込むファイルパスのリスト)",
-  };
+  readonly args_schema = FileReaderArgsSchema;
 
   async execute(
     args: ToolArgs,
     workspace: Workspace
   ): Promise<Record<string, string>> {
     if (!args.FileReaderTool) {
-      throw new Error("引数 'args' 内のFileReaderToolが設定されていません。");
+      throw new Error("引数 'args' 内に必要なパラメータが設定されていません。");
     }
     if (!Array.isArray(args.FileReaderTool.filenames)) {
       throw new Error(

@@ -25,17 +25,19 @@ async function main() {
   const orchestrator = new Orchestrator(ui);
 
   try {
-    const mode = await ui.getUserInput(
-      "新しいプロジェクトを開始しますか、既存のプロジェクトを再開しますか？ (new/resume): "
-    );
-    let initialSpeaker: string;
-    if (mode.toLowerCase() === "resume") {
-      initialSpeaker = await orchestrator.setupResumeProject(
-        client,
-        model_name
+    let initialSpeaker: string | undefined = undefined;
+    while (!initialSpeaker) {
+      const mode = await ui.getUserInput(
+        "新しいプロジェクトを開始しますか、既存のプロジェクトを再開しますか？ (new/resume): "
       );
-    } else {
-      initialSpeaker = await orchestrator.setupNewProject(client, model_name);
+      if (mode.trim().toLowerCase() === "resume") {
+        initialSpeaker = await orchestrator.setupResumeProject(
+          client,
+          model_name
+        );
+      } else if (mode.trim().toLowerCase() === "new") {
+        initialSpeaker = await orchestrator.setupNewProject(client, model_name);
+      }
     }
     await orchestrator.run(client, initialSpeaker, model_name);
   } catch (e) {

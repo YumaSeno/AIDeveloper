@@ -4,7 +4,9 @@ import { z } from "zod";
 import { ToolArgs } from "./Tools";
 
 export const FileNameContentSetSchema = z.object({
-  filename: z.string().describe("パスを含むファイル名(例:docs/要件定義書.md)"),
+  filename: z
+    .string()
+    .describe("パスを含むファイル名(例:docs/要件定義書.md、src/index.html)"),
   contents: z.string().describe("ファイルの内容"),
 });
 export type FileNameContentSet = z.infer<typeof FileNameContentSetSchema>;
@@ -19,13 +21,11 @@ export type FileWriterArgs = z.infer<typeof FileWriterArgsSchema>;
 export class FileWriterTool extends Tool {
   readonly description =
     "指定された複数のファイルの内容を読み込み、その内容を返します。";
-  readonly args_schema = {
-    filenames: "string[] (読み込むファイルパスのリスト)",
-  };
+  readonly args_schema = FileWriterArgsSchema;
 
   async execute(args: ToolArgs, workspace: Workspace): Promise<string> {
     if (!args.FileWriterTool) {
-      throw new Error("引数 'args' 内のFileWriterToolが設定されていません。");
+      throw new Error("引数 'args' 内に必要なパラメータが設定されていません。");
     }
     if (!Array.isArray(args.FileWriterTool.artifacts)) {
       throw new Error(
