@@ -1,4 +1,4 @@
-import { Tool } from "./Tool";
+import { ToolWithGenerics } from "./Tool";
 import { Workspace } from "../core/Workspace";
 import { z } from "zod";
 import { ToolArgs } from "./Tools";
@@ -8,10 +8,18 @@ export const ShellCommandToolArgsSchema = z.object({
 });
 export type ShellCommandToolArgs = z.infer<typeof ShellCommandToolArgsSchema>;
 
-export class ShellCommandTool extends Tool {
+export class ShellCommandTool extends ToolWithGenerics<any> {
   readonly description =
     "シェルコマンドを実行します。コマンドはコンテナ内で実行され、osはDebianです。ルートフォルダ直下の/workspace/[プロジェクト名]にファイルが配置されます。";
   readonly args_schema = ShellCommandToolArgsSchema;
+
+  omitArgs(args: ToolArgs): ToolArgs {
+    return args;
+  }
+
+  omitResult(result: any): any {
+    return result;
+  }
 
   async execute(args: ToolArgs, workspace: Workspace): Promise<any> {
     // if (!args.ShellCommandTool) {

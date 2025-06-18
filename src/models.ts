@@ -6,7 +6,7 @@ export const TurnOutputSchema = z.object({
     .string()
     .default("")
     .describe(
-      "この出力の送信元エージェント名。Orchestratorによって設定される。"
+      "この出力の送信元エージェント名。システム側で設定するため設定不要。"
     ),
   target_type: z
     .enum(["AGENT", "TOOL"])
@@ -27,7 +27,6 @@ export const TurnOutputSchema = z.object({
   tool_args: ToolArgsSchema.describe(
     "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は空で設定。"
   ),
-  thought: z.string().describe("なぜこの行動を選択したかの思考プロセス。"),
 });
 export type TurnOutput = z.infer<typeof TurnOutputSchema>;
 
@@ -52,7 +51,14 @@ export const AgentExplanationSchema = z.object({
     .describe("エージェントの一般的な役割（例：'バックエンド開発者'）。"),
   project_role: z
     .string()
-    .describe("このプロジェクトにおける、エージェントの具体的な役割と責任。"),
+    .describe(
+      "このプロジェクトにおける、エージェントの具体的な役割と責任。（例：'PHPを用いてサーバーサイドAPIとデータベースの設計・実装を担当します。会計ロジック、カルテ連携、各種マスタ管理機能のバックエンド開発に責任を持ちます。'）"
+    ),
+  detailed_instructions: z
+    .string()
+    .describe(
+      "エージェント個人に対してのプロジェクトを通しての指示。このエージェントが意識すべきこと。（例：'PHPを用いてサーバーサイドAPIとデータベースの設計・実装を担当します。会計ロジック、カルテ連携、各種マスタ管理機能のバックエンド開発に責任を持ちます。'）"
+    ),
 });
 export type AgentExplanation = z.infer<typeof AgentExplanationSchema>;
 

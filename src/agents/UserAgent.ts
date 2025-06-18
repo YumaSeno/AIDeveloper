@@ -7,12 +7,13 @@ export class UserAgent extends Agent {
   private ui: CommandLineUI;
 
   constructor(name: string, ui: CommandLineUI) {
-    super(
-      name,
-      "クライアント",
-      `クライアントを表すエージェントです。要件の聞き取りの対象者です。
-      また、製造を進める中で出てきた、仕様について不明な点や検討すべき内容の質問を受け付けます。`
-    );
+    super({
+      name: name,
+      role: "クライアント",
+      projectRole: `クライアントを表すエージェントです。要件の聞き取りの対象者です。
+      また、製造を進める中で出てきた、仕様について不明な点や検討すべき内容の質問を受け付けます。`,
+      detailedInstructions: ``,
+    });
     this.ui = ui;
   }
 
@@ -35,7 +36,6 @@ export class UserAgent extends Agent {
       target_type: "AGENT",
       recipient: recipient,
       message: userInput,
-      thought: "（ユーザーの思考は直接入力された）",
       sender: this.name,
       tool_args: {},
       special_action: "_",

@@ -1,25 +1,30 @@
 import { GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import { ToolResult, TurnOutput, TurnOutputSchema } from "../models";
+import { z } from "zod";
 import { Agent } from "./Agent";
 import { Tool } from "../tools/Tool";
-import { error } from "console";
-import { z } from "zod";
 import { toGeminiSchema } from "../core/ZodSchemaConverter";
 
 export class AIAgent extends Agent {
   protected client: GoogleGenAI;
   protected modelName: string;
 
-  constructor(
-    client: GoogleGenAI,
-    name: string,
-    role: string,
-    projectRole: string,
-    modelName: string
-  ) {
-    super(name, role, projectRole);
-    this.client = client;
-    this.modelName = modelName;
+  constructor(args: {
+    client: GoogleGenAI;
+    name: string;
+    role: string;
+    projectRole: string;
+    detailedInstructions: string;
+    modelName: string;
+  }) {
+    super({
+      name: args.name,
+      role: args.role,
+      projectRole: args.projectRole,
+      detailedInstructions: args.detailedInstructions,
+    });
+    this.client = args.client;
+    this.modelName = args.modelName;
   }
 
   protected async _executeJson(
@@ -80,20 +85,34 @@ export class AIAgent extends Agent {
       name: k,
       description: tools[k].getDescription(),
     }));
-    const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
+    // ファイルの内容・Webページの内容などを除いたメッセージ履歴
+    const historyForPrompt = personalHistory.map((turn) => {
+      // 直近10回の履歴であればファイル内容等もログに含める。
+      if (personalHistory.indexOf(turn) > personalHistory.length - 11)
+        return turn;
+      const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
+      if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
+        turnobj.tool_args = tools[turnobj.recipient].omitArgs(
+          turnobj.tool_args
+        );
+      }
+      if ("tool_name" in turnobj)
+        turnobj.result = tools[turnobj.tool_name].omitResult(turnobj.result);
+      return turnobj;
+    });
 
     const prompt = `あなたは自律型開発チームの一員です。
 あなたの名前: ${this.name}
-あなたの役割: ${this.projectRole || this.role}
+プロジェクト内でのあなたの役職: ${this.role}
+プロジェクト内でのあなたの役割: ${this.projectRole}
+プロジェクトを通してのあなたへの指示・意識すべきこと: ${
+      this.detailedInstructions
+    }
 
-あなたはプロジェクト全体の会話ログを見ることはできません。判断材料は、あなた自身の過去のやり取りと、現在のファイル状況のみです。
-このチームのメンバはUSERを除いて全員AIで構成されており、人間のチームによる開発とは特性が大きく異なります。
-仮想のミーティングのスケジュールを組む、実際に行われていないテストについてのテスト結果を報告する、ファイルを作成していないのに確認を求めるなど、このチームの開発に必要のない行動は取らないで下さい。
-特定の一人に対してのみ指示・質問を行い、それを相互に繰り返すことで開発を進めて行きます。並行して指示をしたり、作業を進めたりすることはできません。
-"ALL"などで全員に周知を行う言動は行わないで下さい。
-繰り返しますが、このチームのメンバは全員AIで構成されており、システムの本質的な完成を目的としています。
-人間のシステム開発チームを演じるのではなく、常に実際に必要な行動を取って下さい。
-また、必要であればPMに確認の上ユーザーに質問・確認を行い、最終的なシステムの完成度が高くなることを目標として下さい。
+
+【タスク】
+あなたの役割に基づき、次に行うべきアクションを決定してください。
+また、あなたはプロジェクト全体の会話ログを見ることはできません。判断材料は、あなた自身の過去のやり取りと、現在のファイル状況のみです。
 
 【プロジェクト名】
 ${project_name}
@@ -104,16 +123,14 @@ ${JSON.stringify(toolDescriptions, null, 2)}
 【現在のチーム構成】
 ${JSON.stringify(team, null, 2)}
 
-【あなたの個人的な送受信メッセージ履歴】
+【あなたの個人的な送受信メッセージ履歴】（直近10回より前の履歴についてはファイル内容やWeb取得内容などを省略しています。必要であれば再取得して下さい。）
 ${JSON.stringify(historyForPrompt, null, 2)}
 
 【現在のプロジェクトファイル一覧】
 ${fileTree}
 
-【タスク】あなたの役割に基づき、次に行うべきアクションを決定してください。
-
 【行動の選択肢】
-1. **他のエージェントと対話する**: \`target_type\`を"AGENT"に設定し、\`recipient\`に対象エージェント名、\`message\`を記述。
+1. **他のエージェントと対話する**: \`target_type\`を"AGENT"に設定し、\`recipient\`に対象エージェント名、\`message\`を記述。※特定の一人に対してのみ指示・質問を行い、それを相互に繰り返すことで開発を進めて行きます。並行して指示をしたり、作業を進めたりすることはできません。"ALL"などを使った全員に対しての発言は行わないで下さい。
 2. **ツールを利用する**: \`target_type\`を"TOOL"に設定し、\`recipient\`に対象ツール名、\`tool_args\`を記述。
 3. **プロジェクト完了**: PMがシステムの製造が完了したと判断した場合のみ、\`special_action\`に"COMPLETE_PROJECT"を設定。
 `;

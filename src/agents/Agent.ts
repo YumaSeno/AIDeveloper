@@ -5,11 +5,18 @@ export abstract class Agent {
   public readonly name: string;
   public readonly role: string;
   public readonly projectRole: string;
+  public readonly detailedInstructions: string;
 
-  constructor(name: string, role: string, projectRole: string) {
-    this.name = name;
-    this.role = role;
-    this.projectRole = projectRole;
+  constructor(args: {
+    name: string;
+    role: string;
+    projectRole: string;
+    detailedInstructions: string;
+  }) {
+    this.name = args.name;
+    this.role = args.role;
+    this.projectRole = args.projectRole;
+    this.detailedInstructions = args.detailedInstructions;
   }
 
   abstract executeTurn(

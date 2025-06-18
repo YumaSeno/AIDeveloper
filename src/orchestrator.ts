@@ -30,7 +30,7 @@ export class Orchestrator {
   private async _setupProject(
     projectName: string,
     client: GoogleGenAI,
-    model_name: string,
+    modelName: string,
     resume = false
   ): Promise<string> {
     this.projectName = projectName;
@@ -44,7 +44,7 @@ export class Orchestrator {
     this.logger = new Logger(metaDir, resume ? "a" : "w");
 
     this.agents = {
-      PM: new PMAgent(client, "PM", model_name),
+      PM: new PMAgent(client, "PM", modelName),
       USER: new UserAgent("USER", this.ui),
     };
 
@@ -59,13 +59,14 @@ export class Orchestrator {
         const plan = PlanProjectAndKickoffSchema.parse(JSON.parse(planData));
         for (const info of Object.values(plan.team)) {
           if (!this.agents[info.name]) {
-            this.agents[info.name] = new AIAgent(
-              client,
-              info.name,
-              info.role,
-              info.project_role,
-              model_name
-            );
+            this.agents[info.name] = new AIAgent({
+              client: client,
+              name: info.name,
+              role: info.role,
+              projectRole: info.project_role,
+              detailedInstructions: info.detailed_instructions,
+              modelName: modelName,
+            });
           }
         }
         this.ui.displayStatus("✅ 開発チームの構成を復元しました。");
@@ -100,7 +101,6 @@ export class Orchestrator {
         recipient: "PM",
         message:
           "プロジェクトを開始します。まずはUSERにヒアリングしてください。",
-        thought: "プロジェクト開始のトリガー",
         target_type: "AGENT",
         tool_args: {},
         special_action: "_",
@@ -112,7 +112,6 @@ export class Orchestrator {
         recipient: "USER",
         message:
           "こんにちは！どのようなアプリケーションを開発したいですか？具体的に教えてください。",
-        thought: "ユーザへの最初の聞き取り",
         target_type: "AGENT",
         tool_args: {},
         special_action: "_",
@@ -224,7 +223,7 @@ export class Orchestrator {
 
   private async _handleFinalizeRequirements(
     client: GoogleGenAI,
-    model_name: string
+    modelName: string
   ): Promise<string> {
     this.ui.printHeader("Phase 2: チーム編成とキックオフ", "-");
     const pm = this.agents["PM"];
@@ -247,13 +246,14 @@ export class Orchestrator {
 
     for (const info of plan.team) {
       if (!this.agents[info.name]) {
-        this.agents[info.name] = new AIAgent(
-          client,
-          info.name,
-          info.role,
-          info.project_role,
-          model_name
-        );
+        this.agents[info.name] = new AIAgent({
+          client: client,
+          name: info.name,
+          role: info.role,
+          projectRole: info.project_role,
+          detailedInstructions: info.detailed_instructions,
+          modelName: modelName,
+        });
       }
     }
 
@@ -266,7 +266,6 @@ export class Orchestrator {
       sender: "PM",
       recipient: "ALL",
       message: plan.broadcast_message,
-      thought: plan.thought,
       target_type: "AGENT",
       tool_args: {},
       special_action: "_",
@@ -277,7 +276,6 @@ export class Orchestrator {
     const firstDirectiveTurn: TurnOutput = {
       sender: "PM",
       ...plan.first_directive,
-      thought: "最初のタスク指示",
       target_type: "AGENT",
       tool_args: {},
       special_action: "_",

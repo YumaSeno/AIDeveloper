@@ -1,4 +1,4 @@
-import { Tool } from "./Tool";
+import { ToolWithGenerics } from "./Tool";
 import { Workspace } from "../core/Workspace";
 import { z } from "zod";
 import { ToolArgs } from "./Tools";
@@ -17,10 +17,18 @@ interface SearchResult {
   url: string;
 }
 
-export class WebSearchTool extends Tool {
+export class WebSearchTool extends ToolWithGenerics<SearchResult[] | String> {
   readonly description =
     "キーワードに関連するウェブページの名前とアドレスを取得します。ページの情報を詳しく閲覧したい場合はGetHttpContentsToolを利用して下さい。";
   readonly args_schema = WebSearchToolArgsSchema;
+
+  omitArgs(args: ToolArgs): ToolArgs {
+    return args;
+  }
+
+  omitResult(result: SearchResult[] | String): SearchResult[] | String {
+    return result;
+  }
 
   async execute(
     args: ToolArgs,

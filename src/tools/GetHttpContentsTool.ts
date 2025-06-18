@@ -1,4 +1,4 @@
-import { Tool } from "./Tool";
+import { ToolWithGenerics } from "./Tool";
 import { Workspace } from "../core/Workspace";
 import { z } from "zod";
 import { ToolArgs } from "./Tools";
@@ -13,10 +13,18 @@ export type GetHttpContentsToolArgs = z.infer<
   typeof GetHttpContentsToolArgsSchema
 >;
 
-export class GetHttpContentsTool extends Tool {
+export class GetHttpContentsTool extends ToolWithGenerics<string> {
   readonly description =
     "キーワードに関連するウェブページの名前とアドレスを取得します。ページの情報を詳しく閲覧したい場合はGetHttpContentsToolを利用して下さい。";
   readonly args_schema = GetHttpContentsToolArgsSchema;
+
+  omitArgs(args: ToolArgs): ToolArgs {
+    return args;
+  }
+
+  omitResult(result: string): string {
+    return "（省略）";
+  }
 
   async execute(args: ToolArgs, workspace: Workspace): Promise<string> {
     if (!args.GetHttpContentsTool) {
