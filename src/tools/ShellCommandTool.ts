@@ -1,27 +1,40 @@
 import { ToolWithGenerics } from "./Tool";
-import { Workspace } from "../core/Workspace";
 import { z } from "zod";
-import { ToolArgs } from "./Tools";
 
 export const ShellCommandToolArgsSchema = z.object({
   command: z.string().describe("実行したいシェルコマンド"),
 });
 export type ShellCommandToolArgs = z.infer<typeof ShellCommandToolArgsSchema>;
 
-export class ShellCommandTool extends ToolWithGenerics<any> {
-  readonly description =
-    "シェルコマンドを実行します。コマンドはコンテナ内で実行され、osはDebianです。ルートフォルダ直下の/workspace/[プロジェクト名]にファイルが配置されます。";
-  readonly args_schema = ShellCommandToolArgsSchema;
+export const ShellCommandToolReturnSchema = z.any();
+export type ShellCommandToolReturn = z.infer<
+  typeof ShellCommandToolReturnSchema
+>;
 
-  omitArgs(args: ToolArgs): ToolArgs {
+export class ShellCommandTool extends ToolWithGenerics<
+  ShellCommandToolArgs,
+  ShellCommandToolReturn
+> {
+  constructor() {
+    super({
+      description:
+        "シェルコマンドを実行します。コマンドはコンテナ内で実行され、osはDebianです。ルートフォルダ直下の/workspace/[プロジェクト名]にファイルが配置されます。",
+      argsSchema: ShellCommandToolArgsSchema,
+      returnSchema: ShellCommandToolReturnSchema,
+    });
+  }
+
+  omitArgs(args: ShellCommandToolArgs): ShellCommandToolArgs {
     return args;
   }
 
-  omitResult(result: any): any {
+  omitResult(result: ShellCommandToolReturn): ShellCommandToolReturn {
     return result;
   }
 
-  async execute(args: ToolArgs, workspace: Workspace): Promise<any> {
+  async _executeTool(
+    args: ShellCommandToolArgs
+  ): Promise<ShellCommandToolReturn> {
     // if (!args.ShellCommandTool) {
     //   throw new Error("引数 'args' 内に必要なパラメータが設定されていません。");
     // }

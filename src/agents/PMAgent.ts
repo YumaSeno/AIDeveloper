@@ -1,10 +1,10 @@
 import { AIAgent } from "./AIAgent";
 import {
   TurnOutput,
-  TurnOutputSchema,
   PlanProjectAndKickoff,
   PlanProjectAndKickoffSchema,
   ToolResult,
+  getTurnOutputSchemaWithTools,
 } from "../models";
 import { Logger } from "../core/Logger";
 import { Tool } from "../tools/Tool";
@@ -30,7 +30,7 @@ export class PMAgent extends AIAgent {
     personalHistory: (TurnOutput | ToolResult)[],
     project_name: string,
     fileTree: string,
-    tools: Record<string, Tool>,
+    tools: Tool[],
     team: Agent[]
   ): Promise<TurnOutput> {
     let isDevPhase = false;
@@ -64,11 +64,11 @@ export class PMAgent extends AIAgent {
     personalHistory: (TurnOutput | ToolResult)[],
     project_name: string,
     fileTree: string,
-    tools: Record<string, Tool>
+    tools: Tool[]
   ): Promise<TurnOutput> {
-    const toolDescriptions = Object.keys(tools).map((k) => ({
-      name: k,
-      description: tools[k].getDescription(),
+    const toolDescriptions = tools.map((v) => ({
+      name: v.constructor.name,
+      description: v.getDescription(),
     }));
     const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
     const prompt = `あなたは優秀なプロジェクトマネージャーです。現在、クライアントと1対1で要件定義を行っています。
@@ -95,7 +95,7 @@ ${JSON.stringify(historyForPrompt, null, 2)}
 【現在のプロジェクトファイル一覧】
 ${fileTree}
 `;
-    return this._executeJson(prompt, TurnOutputSchema);
+    return this._executeJson(prompt, getTurnOutputSchemaWithTools(tools));
   }
 
   async planProjectKickoff(

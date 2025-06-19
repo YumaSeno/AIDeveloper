@@ -1,42 +1,52 @@
 import { ToolWithGenerics } from "./Tool";
 import { Workspace } from "../core/Workspace";
 import { z } from "zod";
-import { ToolArgs } from "./Tools";
 
-export const FileReaderArgsSchema = z.object({
+const FileReaderArgsSchema = z.object({
   filenames: z.array(z.string()).describe("読み込みたいファイルの一覧"),
 });
-export type FileReaderArgs = z.infer<typeof FileReaderArgsSchema>;
+type FileReaderArgs = z.infer<typeof FileReaderArgsSchema>;
 
-export class FileReaderTool extends ToolWithGenerics<Record<string, string>> {
-  readonly description =
-    "指定された複数のファイルの内容を読み込み、その内容を返します。";
-  readonly args_schema = FileReaderArgsSchema;
+const FileReaderReturnSchema = z.record(
+  z.string().describe("ファイル名"),
+  z.string().describe("ファイルの内容")
+);
+type FileReaderReturn = z.infer<typeof FileReaderReturnSchema>;
 
-  omitArgs(args: ToolArgs): ToolArgs {
+export class FileReaderTool extends ToolWithGenerics<
+  FileReaderArgs,
+  FileReaderReturn
+> {
+  protected readonly workspace: Workspace;
+
+  constructor(workspace: Workspace) {
+    super({
+      description:
+        "指定された複数のファイルの内容を読み込み、その内容を返します。",
+      argsSchema: FileReaderArgsSchema,
+      returnSchema: FileReaderReturnSchema,
+    });
+    this.workspace = workspace;
+  }
+
+  omitArgs(args: FileReaderArgs): FileReaderArgs {
     return args;
   }
 
-  omitResult(result: Record<string, string>): Record<string, string> {
-    const omitted: Record<string, string> = { ...result };
+  omitResult(result: FileReaderReturn): FileReaderReturn {
+    const omitted: FileReaderReturn = { ...result };
     for (const key in omitted) {
       omitted[key] = "(省略)";
     }
     return omitted;
   }
 
-  async execute(
-    args: ToolArgs,
-    workspace: Workspace
-  ): Promise<Record<string, string>> {
-    if (!args.FileReaderTool) {
-      throw new Error("引数 'args' 内に必要なパラメータが設定されていません。");
-    }
-    if (!Array.isArray(args.FileReaderTool.filenames)) {
+  async _executeTool(args: FileReaderArgs): Promise<FileReaderReturn> {
+    if (!Array.isArray(args.filenames)) {
       throw new Error(
         "引数 'args' 内の 'FileReaderTool.filenames' 内に取得したいファイル名のリストを含める必要があります。"
       );
     }
-    return workspace.readFiles(args.FileReaderTool.filenames);
+    return this.workspace.readFiles(args.filenames);
   }
 }

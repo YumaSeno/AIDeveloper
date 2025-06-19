@@ -1,17 +1,18 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import {
-  TurnOutput,
-  ToolResult,
-  TurnOutputSchema,
-  ToolResultSchema,
-} from "../models";
+import { TurnOutput, ToolResult, ToolResultSchema } from "../models";
+import { z } from "zod";
 
 export class Logger {
   private readonly logFilePath: string;
   private inMemoryLog: (TurnOutput | ToolResult)[] = [];
+  private turnOutputSchema: z.ZodTypeAny;
 
-  constructor(logDir: string, mode: "w" | "a" = "w") {
+  constructor(
+    logDir: string,
+    mode: "w" | "a" = "w",
+    turnOutputSchema: z.ZodTypeAny
+  ) {
     this.logFilePath = path.join(logDir, "00_Project_Log.jsonl");
     if (mode === "w") {
       // ファイルを空にする
@@ -19,6 +20,7 @@ export class Logger {
         throw new Error(`ログファイルの初期化に失敗しました: ${e}`);
       });
     }
+    this.turnOutputSchema = turnOutputSchema;
   }
 
   async log(turnObject: TurnOutput | ToolResult): Promise<void> {
@@ -40,7 +42,7 @@ export class Logger {
             const logType = logEntry.log_type;
             const data = logEntry.data;
             if (logType === "turn") {
-              return TurnOutputSchema.parse(data);
+              return this.turnOutputSchema.parse(data);
             } else if (logType === "tool_result") {
               return ToolResultSchema.parse(data);
             }

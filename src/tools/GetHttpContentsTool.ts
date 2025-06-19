@@ -1,10 +1,20 @@
 import { ToolWithGenerics } from "./Tool";
-import { Workspace } from "../core/Workspace";
 import { z } from "zod";
-import { ToolArgs } from "./Tools";
 import axios from "axios";
+import { GoogleGenAI } from "@google/genai";
 
 export const GetHttpContentsToolArgsSchema = z.object({
+  summarize: z
+    .boolean()
+    .default(true)
+    .describe(
+      "取得した内容の文章化を行うかどうか。jsやcssなどのコード自体を取得したい場合を除き、基本的にはtrueとして下さい。"
+    ),
+  summary_instructions: z
+    .string()
+    .describe(
+      "文章化についての指示。(例:〇〇株式会社の沿革について、省略せずにまとめて下さい。)"
+    ),
   url: z
     .string()
     .describe("取得したいhttpリクエスト先のアドレス(例:https://google.com)"),
@@ -13,12 +23,32 @@ export type GetHttpContentsToolArgs = z.infer<
   typeof GetHttpContentsToolArgsSchema
 >;
 
-export class GetHttpContentsTool extends ToolWithGenerics<string> {
-  readonly description =
-    "キーワードに関連するウェブページの名前とアドレスを取得します。ページの情報を詳しく閲覧したい場合はGetHttpContentsToolを利用して下さい。";
+const GetHttpContentsToolReturnSchema = z.string().describe("取得結果の要約");
+type GetHttpContentsToolReturn = z.infer<
+  typeof GetHttpContentsToolReturnSchema
+>;
+
+export class GetHttpContentsTool extends ToolWithGenerics<
+  GetHttpContentsToolArgs,
+  GetHttpContentsToolReturn
+> {
+  readonly description = "Webページの内容を取得し、要約します。";
   readonly args_schema = GetHttpContentsToolArgsSchema;
 
-  omitArgs(args: ToolArgs): ToolArgs {
+  protected readonly client: GoogleGenAI;
+  protected readonly modelName: string;
+
+  constructor(client: GoogleGenAI, modelName: string) {
+    super({
+      description: "Webページの内容を取得し、要約します。",
+      argsSchema: GetHttpContentsToolArgsSchema,
+      returnSchema: GetHttpContentsToolReturnSchema,
+    });
+    this.client = client;
+    this.modelName = modelName;
+  }
+
+  omitArgs(args: GetHttpContentsToolArgs): GetHttpContentsToolArgs {
     return args;
   }
 
@@ -26,17 +56,13 @@ export class GetHttpContentsTool extends ToolWithGenerics<string> {
     return "（省略）";
   }
 
-  async execute(args: ToolArgs, workspace: Workspace): Promise<string> {
-    if (!args.GetHttpContentsTool) {
-      throw new Error("引数 'args' 内に必要なパラメータが設定されていません。");
-    }
-    if (
-      args.GetHttpContentsTool.url == null ||
-      args.GetHttpContentsTool.url === ""
-    ) {
+  async _executeTool(
+    args: GetHttpContentsToolArgs
+  ): Promise<GetHttpContentsToolReturn> {
+    if (args.url === "") {
       throw new Error("args.GetHttpContentsTool.queryが空になっています。");
     }
-    const url = args.GetHttpContentsTool.url;
+    const url = args.url;
     const response = await axios.get(url, {
       headers: {
         // 一部のサイトではUser-Agentがないとアクセスを弾かれる場合があるため指定
@@ -45,9 +71,50 @@ export class GetHttpContentsTool extends ToolWithGenerics<string> {
       },
     });
 
-    await new Promise((res) => setTimeout(res, 5000)); // 連続でリクエストを送るとコンピュータであると認識される可能性があるため。
+    let contents = response.data;
 
-    const html = response.data;
-    return html;
+    if (typeof contents !== "string") {
+      return "文字列以外の内容でした。内容を表示できません。";
+    }
+
+    if (args.summarize) {
+      let error_count = 0;
+      while (true) {
+        try {
+          const response = await this.client.models.generateContent({
+            model: this.modelName,
+            contents: `以下は「${url}」から取得したコンテンツの内容です。\n以下の指示にしたがってプレーンテキスト化して下さい。\n【指示】${args.summary_instructions}\n\n【コンテンツ内容】\n${contents}`,
+          });
+          if (!response.text)
+            throw new Error(
+              "geminiからの回答に一切テキストが含まれませんでした。"
+            );
+          contents = response.text;
+          break;
+        } catch (e) {
+          error_count++;
+          if (error_count > 3) {
+            console.warn(
+              `警告: API呼び出し中に3回連続でエラーが発生しました: ${e}。異常終了します。`
+            );
+            throw e;
+          }
+          console.warn(
+            `警告: API呼び出し中にエラーが発生しました: ${e}。30秒待機してリトライします。`
+          );
+          await new Promise((res) => setTimeout(res, 30000));
+        }
+      }
+    }
+
+    await new Promise((res) =>
+      setTimeout(res, this.getRandomArbitrary(15000, 30000))
+    ); // 連続でリクエストを送るとコンピュータであると認識される可能性があるため。
+
+    return contents;
+  }
+
+  private getRandomArbitrary(min: number, max: number) {
+    return Math.random() * (max - min) + min;
   }
 }

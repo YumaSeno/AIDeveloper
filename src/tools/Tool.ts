@@ -1,24 +1,35 @@
 import { z } from "zod";
-import { Workspace } from "../core/Workspace";
-import { ToolArgs } from "./Tools";
 
 export interface ToolDescription {
   description: string;
 }
 
-export abstract class ToolWithGenerics<T> {
-  abstract readonly args_schema: z.ZodTypeAny;
-  abstract readonly description: string;
+export abstract class ToolWithGenerics<T, U> {
+  readonly description: string;
+  readonly argsSchema: z.ZodTypeAny;
+  readonly returnSchema: z.ZodTypeAny;
 
-  abstract execute(args: ToolArgs, workspace: Workspace): Promise<T>;
+  abstract _executeTool(args: T): Promise<U>;
+  abstract omitArgs(args: T): T;
+  abstract omitResult(result: U): U;
 
-  abstract omitArgs(args: ToolArgs): ToolArgs;
+  constructor(args: {
+    description: string;
+    argsSchema: z.ZodTypeAny;
+    returnSchema: z.ZodTypeAny;
+  }) {
+    this.description = args.description;
+    this.argsSchema = args.argsSchema;
+    this.returnSchema = args.returnSchema;
+  }
 
-  abstract omitResult(result: T): T;
+  async execute(args: any): Promise<U> {
+    return this._executeTool(this.argsSchema.parse(args));
+  }
 
   getDescription(): string {
     return this.description;
   }
 }
 
-export abstract class Tool extends ToolWithGenerics<any> {}
+export abstract class Tool extends ToolWithGenerics<any, any> {}

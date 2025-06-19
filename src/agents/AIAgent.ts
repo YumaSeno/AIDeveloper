@@ -1,13 +1,18 @@
 import { GenerateContentConfig, GoogleGenAI } from "@google/genai";
-import { ToolResult, TurnOutput, TurnOutputSchema } from "../models";
+import {
+  getTurnOutputSchemaWithTools,
+  ToolResult,
+  TurnOutput,
+} from "../models";
 import { z } from "zod";
 import { Agent } from "./Agent";
 import { Tool } from "../tools/Tool";
 import { toGeminiSchema } from "../core/ZodSchemaConverter";
+import { string } from "zod/v4";
 
 export class AIAgent extends Agent {
-  protected client: GoogleGenAI;
-  protected modelName: string;
+  protected readonly client: GoogleGenAI;
+  protected readonly modelName: string;
 
   constructor(args: {
     client: GoogleGenAI;
@@ -30,7 +35,7 @@ export class AIAgent extends Agent {
   protected async _executeJson(
     prompt: string,
     responseSchema: z.ZodTypeAny
-  ): Promise<any> {
+  ): Promise<z.infer<typeof responseSchema>> {
     const config: GenerateContentConfig = {
       responseMimeType: "application/json",
       responseSchema: toGeminiSchema(responseSchema),
@@ -78,13 +83,15 @@ export class AIAgent extends Agent {
     personalHistory: (TurnOutput | ToolResult)[],
     project_name: string,
     fileTree: string,
-    tools: Record<string, Tool>,
+    tools: Tool[],
     team: Agent[]
   ): Promise<TurnOutput> {
-    const toolDescriptions = Object.keys(tools).map((k) => ({
-      name: k,
-      description: tools[k].getDescription(),
+    const toolDescriptions = tools.map((v) => ({
+      name: v.constructor.name,
+      description: v.getDescription(),
     }));
+    const toolRecord: Record<string, Tool> = {};
+    for (const tool of tools) toolRecord[tool.constructor.name] = tool;
     // ファイルの内容・Webページの内容などを除いたメッセージ履歴
     const historyForPrompt = personalHistory.map((turn) => {
       // 直近10回の履歴であればファイル内容等もログに含める。
@@ -92,12 +99,16 @@ export class AIAgent extends Agent {
         return turn;
       const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
       if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
-        turnobj.tool_args = tools[turnobj.recipient].omitArgs(
-          turnobj.tool_args
+        const tool_args: { [key: string]: any } = turnobj.tool_args;
+        tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
+          tool_args[turnobj.recipient]
         );
+        turnobj.tool_args = tool_args;
       }
       if ("tool_name" in turnobj)
-        turnobj.result = tools[turnobj.tool_name].omitResult(turnobj.result);
+        turnobj.result = toolRecord[turnobj.tool_name].omitResult(
+          turnobj.result
+        );
       return turnobj;
     });
 
@@ -134,6 +145,6 @@ ${fileTree}
 2. **ツールを利用する**: \`target_type\`を"TOOL"に設定し、\`recipient\`に対象ツール名、\`tool_args\`を記述。
 3. **プロジェクト完了**: PMがシステムの製造が完了したと判断した場合のみ、\`special_action\`に"COMPLETE_PROJECT"を設定。
 `;
-    return this._executeJson(prompt, TurnOutputSchema);
+    return this._executeJson(prompt, getTurnOutputSchemaWithTools(tools));
   }
 }

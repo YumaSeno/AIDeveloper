@@ -21,7 +21,7 @@ export class UserAgent extends Agent {
     personalHistory: (TurnOutput | ToolResult)[],
     project_name: string,
     fileTree: string,
-    tools: Record<string, Tool>,
+    tools: Tool[],
     team: Agent[]
   ): Promise<TurnOutput> {
     const lastTurn =

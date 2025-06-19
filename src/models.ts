@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { ToolArgsSchema } from "./tools/Tools";
+import { Tool } from "./tools/Tool";
 
-export const TurnOutputSchema = z.object({
+const TurnOutputSchema = z.object({
   sender: z
     .string()
     .default("")
@@ -24,10 +24,32 @@ export const TurnOutputSchema = z.object({
       "対象がエージェントの場合に送信するメッセージ。対象がツールの場合は設定しない。"
     )
     .optional(),
-  tool_args: ToolArgsSchema.describe(
-    "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は空で設定。"
-  ),
+  tool_args: z
+    .any()
+    .describe(
+      "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は設定しない。"
+    ),
 });
+const TurnOutputSchemaObjectToolArgs = TurnOutputSchema.extend({
+  tool_args: z.object({}),
+});
+export function getTurnOutputSchemaWithTools(
+  tools: Tool[]
+): typeof TurnOutputSchemaObjectToolArgs {
+  const zodTools: { [key: string]: z.ZodTypeAny } = {};
+  for (const tool of tools) {
+    zodTools[tool.constructor.name] = tool.argsSchema.optional();
+  }
+  const returnSchema = z.object({
+    ...TurnOutputSchema.shape,
+    tool_args: z
+      .object(zodTools)
+      .describe(
+        "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は設定しない。"
+      ),
+  });
+  return returnSchema;
+}
 export type TurnOutput = z.infer<typeof TurnOutputSchema>;
 
 export const ToolResultSchema = z.object({

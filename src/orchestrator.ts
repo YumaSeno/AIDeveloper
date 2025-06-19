@@ -7,10 +7,14 @@ import { Logger } from "./core/Logger";
 import { Workspace } from "./core/Workspace";
 import { Tool } from "./tools/Tool";
 import { CommandLineUI } from "./ui";
-import { TurnOutput, ToolResult, PlanProjectAndKickoffSchema } from "./models";
+import {
+  TurnOutput,
+  ToolResult,
+  PlanProjectAndKickoffSchema,
+  getTurnOutputSchemaWithTools,
+} from "./models";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { Tools } from "./tools/Tools";
 
 const META_DIR = "_meta";
 const PLAN_FILE = "01_project_plan.json";
@@ -21,27 +25,31 @@ export class Orchestrator {
   private workspace!: Workspace;
   private logger!: Logger;
   private agents: Record<string, Agent> = {};
-  private tools: Record<string, Tool> = Tools;
+  private tools: Tool[];
 
-  constructor(ui: CommandLineUI) {
+  constructor(ui: CommandLineUI, tools: Tool[]) {
     this.ui = ui;
+    this.tools = tools;
   }
 
-  private async _setupProject(
+  async setupProject(
     projectName: string,
+    workspace: Workspace,
     client: GoogleGenAI,
     modelName: string,
     resume = false
   ): Promise<string> {
     this.projectName = projectName;
-    this.workspace = new Workspace(
-      projectName || `autogen_project_${Date.now()}`
-    );
+    this.workspace = workspace;
     this.ui.displayStatus(`📂 ワークスペース: ${this.workspace.projectPath}`);
 
     const metaDir = path.join(this.workspace.projectPath, META_DIR);
     await fs.mkdir(metaDir, { recursive: true });
-    this.logger = new Logger(metaDir, resume ? "a" : "w");
+    this.logger = new Logger(
+      metaDir,
+      resume ? "a" : "w",
+      getTurnOutputSchemaWithTools(this.tools)
+    );
 
     this.agents = {
       PM: new PMAgent(client, "PM", modelName),
@@ -122,26 +130,6 @@ export class Orchestrator {
     }
   }
 
-  async setupNewProject(
-    client: GoogleGenAI,
-    model_name: string
-  ): Promise<string> {
-    const projectName = await this.ui.getUserInput(
-      "新しいプロジェクト名を入力: "
-    );
-    return this._setupProject(projectName, client, model_name, false);
-  }
-
-  async setupResumeProject(
-    client: GoogleGenAI,
-    model_name: string
-  ): Promise<string> {
-    const projectName = await this.ui.getUserInput(
-      "再開するプロジェクト名を入力: "
-    );
-    return this._setupProject(projectName, client, model_name, true);
-  }
-
   async run(
     client: GoogleGenAI,
     nextSpeakerName: string,
@@ -199,9 +187,11 @@ export class Orchestrator {
 
   private async _executeTool(
     toolName: string,
-    toolArgs: any | undefined
+    toolArgs: { [key: string]: any }
   ): Promise<ToolResult> {
-    const tool = this.tools[toolName];
+    const toolRecord: Record<string, Tool> = {};
+    for (const tool of this.tools) toolRecord[tool.constructor.name] = tool;
+    const tool = toolRecord[toolName];
     if (!tool)
       return {
         tool_name: toolName,
@@ -209,8 +199,15 @@ export class Orchestrator {
         error: true,
       };
 
+    if (!toolArgs[toolName])
+      return {
+        tool_name: toolName,
+        result: `エラー: ツール '${toolName}' が見つかりません。`,
+        error: true,
+      };
+
     try {
-      const result = await tool.execute(toolArgs, this.workspace);
+      const result = await tool.execute(toolArgs[toolName]);
       return { tool_name: toolName, result, error: false };
     } catch (e) {
       return {
