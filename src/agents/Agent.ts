@@ -1,5 +1,13 @@
 import { ToolResult, TurnOutput } from "../models";
 import { Tool } from "../tools/Tool";
+import { z } from "zod";
+
+const AgentOverviewSchema = z.object({
+  name: z.string(),
+  role: z.string(),
+  projectRole: z.string(),
+});
+type AgentOverview = z.infer<typeof AgentOverviewSchema>;
 
 export abstract class Agent {
   public readonly name: string;
@@ -17,6 +25,14 @@ export abstract class Agent {
     this.role = args.role;
     this.projectRole = args.projectRole;
     this.detailedInstructions = args.detailedInstructions;
+  }
+
+  getOverview(): AgentOverview {
+    return {
+      name: this.name,
+      role: this.role,
+      projectRole: this.projectRole,
+    };
   }
 
   abstract executeTurn(

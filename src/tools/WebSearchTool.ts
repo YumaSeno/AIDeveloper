@@ -184,7 +184,9 @@ export class WebSearchTool extends ToolWithGenerics<
     return result;
   }
 
-  async _executeTool(args: WebSearchToolArgs): Promise<WebSearchToolReturn> {
+  protected async _executeTool(
+    args: WebSearchToolArgs
+  ): Promise<WebSearchToolReturn> {
     if (args.query == null || args.query === "") {
       throw new Error("args.WebSearchTool.queryが空になっています。");
     }

@@ -3,7 +3,13 @@ import { Workspace } from "../core/Workspace";
 import { z } from "zod";
 
 const FileReaderArgsSchema = z.object({
-  filenames: z.array(z.string()).describe("読み込みたいファイルの一覧"),
+  filenames: z.array(
+    z
+      .string()
+      .describe(
+        "読み込みたいファイルの相対パスを含むファイル名(例:docs/要件定義書.md、src/index.html) ※絶対パスは指定しないで下さい。"
+      )
+  ),
 });
 type FileReaderArgs = z.infer<typeof FileReaderArgsSchema>;
 
@@ -41,7 +47,9 @@ export class FileReaderTool extends ToolWithGenerics<
     return omitted;
   }
 
-  async _executeTool(args: FileReaderArgs): Promise<FileReaderReturn> {
+  protected async _executeTool(
+    args: FileReaderArgs
+  ): Promise<FileReaderReturn> {
     if (!Array.isArray(args.filenames)) {
       throw new Error(
         "引数 'args' 内の 'FileReaderTool.filenames' 内に取得したいファイル名のリストを含める必要があります。"

@@ -3,12 +3,12 @@ import { z } from "zod";
 import axios from "axios";
 import { GoogleGenAI } from "@google/genai";
 
-export const GetHttpContentsToolArgsSchema = z.object({
+const GetHttpContentsToolArgsSchema = z.object({
   summarize: z
     .boolean()
     .default(true)
     .describe(
-      "取得した内容の文章化を行うかどうか。jsやcssなどのコード自体を取得したい場合を除き、基本的にはtrueとして下さい。"
+      "取得した内容の文章化を行うかどうか。HTMLタグなどの不必要な情報を除き文章量を削減するため、jsやcssなどのコード自体を取得したい場合を除き基本的にはtrueとして下さい。"
     ),
   summary_instructions: z
     .string()
@@ -19,9 +19,7 @@ export const GetHttpContentsToolArgsSchema = z.object({
     .string()
     .describe("取得したいhttpリクエスト先のアドレス(例:https://google.com)"),
 });
-export type GetHttpContentsToolArgs = z.infer<
-  typeof GetHttpContentsToolArgsSchema
->;
+type GetHttpContentsToolArgs = z.infer<typeof GetHttpContentsToolArgsSchema>;
 
 const GetHttpContentsToolReturnSchema = z.string().describe("取得結果の要約");
 type GetHttpContentsToolReturn = z.infer<
@@ -32,9 +30,6 @@ export class GetHttpContentsTool extends ToolWithGenerics<
   GetHttpContentsToolArgs,
   GetHttpContentsToolReturn
 > {
-  readonly description = "Webページの内容を取得し、要約します。";
-  readonly args_schema = GetHttpContentsToolArgsSchema;
-
   protected readonly client: GoogleGenAI;
   protected readonly modelName: string;
 
@@ -56,7 +51,7 @@ export class GetHttpContentsTool extends ToolWithGenerics<
     return "（省略）";
   }
 
-  async _executeTool(
+  protected async _executeTool(
     args: GetHttpContentsToolArgs
   ): Promise<GetHttpContentsToolReturn> {
     if (args.url === "") {

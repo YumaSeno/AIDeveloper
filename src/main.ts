@@ -7,6 +7,9 @@ import { Workspace } from "./core/Workspace";
 import { FileWriterTool } from "./tools/FileWriterTool";
 import { WebSearchTool } from "./tools/WebSearchTool";
 import { GetHttpContentsTool } from "./tools/GetHttpContentsTool";
+import { ShellCommandTool } from "./tools/ShellCommandTool";
+import path from "path";
+import { GetImageTool } from "./tools/GetImageTool";
 
 async function main() {
   dotenv.config();
@@ -51,6 +54,8 @@ async function main() {
         new FileWriterTool(workspace),
         new WebSearchTool(),
         new GetHttpContentsTool(client, model_name),
+        new ShellCommandTool(path.resolve(workspace.projectPath)),
+        new GetImageTool(path.resolve(workspace.projectPath)),
       ]);
       const initialSpeaker = await orchestrator.setupProject(
         projectName,

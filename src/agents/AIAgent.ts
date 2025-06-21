@@ -1,4 +1,8 @@
-import { GenerateContentConfig, GoogleGenAI } from "@google/genai";
+import {
+  ContentListUnion,
+  GenerateContentConfig,
+  GoogleGenAI,
+} from "@google/genai";
 import {
   getTurnOutputSchemaWithTools,
   ToolResult,
@@ -8,7 +12,6 @@ import { z } from "zod";
 import { Agent } from "./Agent";
 import { Tool } from "../tools/Tool";
 import { toGeminiSchema } from "../core/ZodSchemaConverter";
-import { string } from "zod/v4";
 
 export class AIAgent extends Agent {
   protected readonly client: GoogleGenAI;
@@ -34,7 +37,8 @@ export class AIAgent extends Agent {
 
   protected async _executeJson(
     prompt: string,
-    responseSchema: z.ZodTypeAny
+    responseSchema: z.ZodTypeAny,
+    base64ImageFile: string | undefined = undefined
   ): Promise<z.infer<typeof responseSchema>> {
     const config: GenerateContentConfig = {
       responseMimeType: "application/json",
@@ -44,9 +48,18 @@ export class AIAgent extends Agent {
     let error_count = 0;
     while (true) {
       try {
+        const contents: ContentListUnion = [prompt];
+        if (base64ImageFile) {
+          contents.push({
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: base64ImageFile,
+            },
+          });
+        }
         const response = await this.client.models.generateContent({
           model: this.modelName,
-          contents: prompt,
+          contents: contents,
           config: config,
         });
 
@@ -79,6 +92,59 @@ export class AIAgent extends Agent {
     }
   }
 
+  organizeHistory(
+    personalHistory: (TurnOutput | ToolResult)[],
+    tools: Tool[]
+  ): {
+    historyForPrompt: (TurnOutput | ToolResult)[];
+    base64ImageFile: string | undefined;
+  } {
+    const toolRecord: Record<string, Tool> = {};
+    for (const tool of tools) toolRecord[tool.constructor.name] = tool;
+
+    let base64ImageFile: string | undefined;
+
+    const historyForPrompt = personalHistory.map((turn) => {
+      const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
+      // 画像データの扱いだけ特殊
+      if ("tool_name" in turnobj && turnobj.tool_name == "GetImageTool") {
+        if (!turnobj.error) {
+          if (personalHistory.indexOf(turn) == personalHistory.length - 1) {
+            base64ImageFile = turnobj.result;
+            turnobj.result = "取得できました。画像データを添付しています。";
+          } else {
+            turnobj.result =
+              "取得できましたが、画像データは1度のみ保持されます。";
+          }
+        }
+        return turnobj;
+      }
+
+      // 直近20回の履歴であればファイル内容等もログに含める。
+      if (personalHistory.indexOf(turn) > personalHistory.length - 21) {
+        return turnobj;
+      }
+
+      // それ以前の履歴は省略する
+      if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
+        const tool_args: { [key: string]: any } = turnobj.tool_args;
+        tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
+          tool_args[turnobj.recipient]
+        );
+        turnobj.tool_args = tool_args;
+      }
+      if ("tool_name" in turnobj && !turnobj.error)
+        turnobj.result = toolRecord[turnobj.tool_name].omitResult(
+          turnobj.result
+        );
+      return turnobj;
+    });
+    return {
+      historyForPrompt: historyForPrompt,
+      base64ImageFile: base64ImageFile,
+    };
+  }
+
   async executeTurn(
     personalHistory: (TurnOutput | ToolResult)[],
     project_name: string,
@@ -90,27 +156,12 @@ export class AIAgent extends Agent {
       name: v.constructor.name,
       description: v.getDescription(),
     }));
-    const toolRecord: Record<string, Tool> = {};
-    for (const tool of tools) toolRecord[tool.constructor.name] = tool;
-    // ファイルの内容・Webページの内容などを除いたメッセージ履歴
-    const historyForPrompt = personalHistory.map((turn) => {
-      // 直近10回の履歴であればファイル内容等もログに含める。
-      if (personalHistory.indexOf(turn) > personalHistory.length - 11)
-        return turn;
-      const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
-      if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
-        const tool_args: { [key: string]: any } = turnobj.tool_args;
-        tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
-          tool_args[turnobj.recipient]
-        );
-        turnobj.tool_args = tool_args;
-      }
-      if ("tool_name" in turnobj)
-        turnobj.result = toolRecord[turnobj.tool_name].omitResult(
-          turnobj.result
-        );
-      return turnobj;
-    });
+
+    const teamDescriptions = team.map((v) => v.getOverview());
+
+    const organized = this.organizeHistory(personalHistory, tools);
+    let base64ImageFile = organized.base64ImageFile;
+    const historyForPrompt = organized.historyForPrompt;
 
     const prompt = `あなたは自律型開発チームの一員です。
 あなたの名前: ${this.name}
@@ -123,7 +174,9 @@ export class AIAgent extends Agent {
 
 【タスク】
 あなたの役割に基づき、次に行うべきアクションを決定してください。
-また、あなたはプロジェクト全体の会話ログを見ることはできません。判断材料は、あなた自身の過去のやり取りと、現在のファイル状況のみです。
+あなたはプロジェクト全体の会話ログを見ることはできません。判断材料は、あなた自身の過去のやり取りと、現在のファイル状況のみです。
+また、あなた自身の過去のやり取りについて、時間が経過した履歴についてはファイル内容やWeb取得内容などを省略します。
+折角取得した情報が失われてしまうため、取得した情報は"こまめに"ファイル等にまとめるようにして下さい。
 
 【プロジェクト名】
 ${project_name}
@@ -132,9 +185,9 @@ ${project_name}
 ${JSON.stringify(toolDescriptions, null, 2)}
 
 【現在のチーム構成】
-${JSON.stringify(team, null, 2)}
+${JSON.stringify(teamDescriptions, null, 2)}
 
-【あなたの個人的な送受信メッセージ履歴】（直近10回より前の履歴についてはファイル内容やWeb取得内容などを省略しています。必要であれば再取得して下さい。）
+【あなたの個人的な送受信メッセージ履歴】
 ${JSON.stringify(historyForPrompt, null, 2)}
 
 【現在のプロジェクトファイル一覧】
@@ -145,6 +198,10 @@ ${fileTree}
 2. **ツールを利用する**: \`target_type\`を"TOOL"に設定し、\`recipient\`に対象ツール名、\`tool_args\`を記述。
 3. **プロジェクト完了**: PMがシステムの製造が完了したと判断した場合のみ、\`special_action\`に"COMPLETE_PROJECT"を設定。
 `;
-    return this._executeJson(prompt, getTurnOutputSchemaWithTools(tools));
+    return this._executeJson(
+      prompt,
+      getTurnOutputSchemaWithTools(tools),
+      base64ImageFile
+    );
   }
 }

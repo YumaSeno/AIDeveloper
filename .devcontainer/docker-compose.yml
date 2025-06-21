@@ -9,8 +9,6 @@ services:
     network_mode: "host"
     volumes:
       - ..:/workspace
-    env_file:
-      - ../.env
     command: >
       /bin/sh -c '
       sudo service docker start &&

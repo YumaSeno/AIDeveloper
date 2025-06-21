@@ -70,7 +70,11 @@ export class PMAgent extends AIAgent {
       name: v.constructor.name,
       description: v.getDescription(),
     }));
-    const historyForPrompt = personalHistory.map((turn) => ({ ...turn }));
+
+    const organized = this.organizeHistory(personalHistory, tools);
+    let base64ImageFile = organized.base64ImageFile;
+    const historyForPrompt = organized.historyForPrompt;
+
     const prompt = `あなたは優秀なプロジェクトマネージャーです。現在、クライアントと1対1で要件定義を行っています。
 あなたは実際にプロジェクトマネージャーとしての業務を行います。
 仮想のミーティングの予定を組む、ファイルを作成していないのに確認を求めるなどの開発者を演じる行動は取らないで下さい。
@@ -95,7 +99,11 @@ ${JSON.stringify(historyForPrompt, null, 2)}
 【現在のプロジェクトファイル一覧】
 ${fileTree}
 `;
-    return this._executeJson(prompt, getTurnOutputSchemaWithTools(tools));
+    return this._executeJson(
+      prompt,
+      getTurnOutputSchemaWithTools(tools),
+      base64ImageFile
+    );
   }
 
   async planProjectKickoff(
@@ -104,6 +112,8 @@ ${fileTree}
   ): Promise<PlanProjectAndKickoff> {
     const fullHistory = logger.getFullHistory();
     const historyForPrompt = fullHistory.map((turn) => ({ ...turn }));
+
+    const teamDescriptions = team.map((v) => v.getOverview());
 
     const prompt = `あなたは卓越したPMです。要件定義が完了しました。
 対話履歴を確認し、このプロジェクトを遂行するための計画を立ててください。
@@ -116,14 +126,17 @@ ${fileTree}
 ・必要であればPMに確認の上ユーザーに質問・確認を行い、最終的なシステムの完成度が高くなることを目標として下さい。
 ・常に利用する流れを想定し、製造が進む中で発生した疑問の質問や、機能の追加・修正に関する提案などは積極的に行って下さい。
 ・また、設計書に利用のフローや利用者のために意識した点なども記載するようにして下さい。
+・出力したソースコードについては、ツールを利用して可能な限りテストを行って下さい。(例:nginxを利用してサーバーを立て、ヘッドレスChromeを使ってブラウザでの見た目を確認するなど。)
 
 【あなたのタスク】
-1. **チーム編成**: プロジェクトに最適な専門家チームを追加し、各々に名前、一般的な役割（role）、プロジェクトでの具体的な役割（project_role）、プロジェクトを通して意識すべきことについての指示（detailed_instructions）を与えてください。現在既に参加しているメンバーの情報は変更しないで下さい。
+1. **チーム編成**: プロジェクトに最適な専門家チームを追加し、各々に名前、一般的な役割（role）、プロジェクトでの具体的な役割（project_role）、プロジェクトを通して意識すべきことについての指示（detailed_instructions）を与えてください。
+                   それぞれの目的ごとにチームを作成し、上司・部下のエージェントをそれぞれ作成することで責務を更に細分化して下さい。(例:デザインマネージャー[上司]、UIデザイナー[部下]、帳票デザイナー[部下])
+                   プロジェクトに現在既に参加しているメンバーの情報は変更しないで下さい。
 2. **全体への周知**: チーム全員にプロジェクトの目標を伝える、簡潔な周知メッセージを作成してください。
 3. **最初の指示**: チームの中から最初の担当者を一人指名し、具体的な最初のタスクを指示してください。
 
 【現在のチーム構成】
-${JSON.stringify(team, null, 2)}
+${JSON.stringify(teamDescriptions, null, 2)}
 
 【対話履歴】
 ${JSON.stringify(historyForPrompt, null, 2)}

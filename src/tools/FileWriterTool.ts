@@ -5,7 +5,9 @@ import { z } from "zod";
 const FileNameContentSetSchema = z.object({
   filename: z
     .string()
-    .describe("パスを含むファイル名(例:docs/要件定義書.md、src/index.html)"),
+    .describe(
+      "書き込みたいファイルの相対パスを含むファイル名(例:docs/要件定義書.md、src/index.html) ※絶対パスは指定しないで下さい。"
+    ),
   contents: z.string().describe("ファイルの内容"),
 });
 type FileNameContentSet = z.infer<typeof FileNameContentSetSchema>;
@@ -49,7 +51,7 @@ export class FileWriterTool extends ToolWithGenerics<
     return result;
   }
 
-  async _executeTool(args: FileWriterArgs): Promise<string> {
+  protected async _executeTool(args: FileWriterArgs): Promise<string> {
     if (args.artifacts.length <= 0) {
       throw new Error(
         "引数 'args' 内の 'FileWriterTool.artifacts' 内に書き込みたいファイル名と内容のリストを含める必要があります。"
