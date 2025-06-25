@@ -1,11 +1,6 @@
 import * as fs from "fs/promises";
 import * as nodefs from "node:fs";
 import * as path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { PromiseWithChild } from "node:child_process";
-
-const execAsync = promisify(exec);
 
 const WORKSPACE_DIR = "workspace";
 const META_DIR = "_meta";
@@ -17,11 +12,6 @@ export class Workspace {
     this.projectPath = Workspace.getResolvePathSafe(WORKSPACE_DIR, projectName);
     // 同期的にディレクトリを作成（初期化時のみ）
     fs.mkdir(this.projectPath, { recursive: true });
-  }
-
-  async chownWorkspaceAll(): Promise<{ stdout: string; stderr: string }> {
-    const { stdout: myname } = await execAsync(`whoami`);
-    return execAsync(`sudo chown -R ${myname.trim()} ${this.projectPath}`);
   }
 
   static getResolvePathSafe(baseDir: string, ...userPaths: string[]): string {
@@ -96,16 +86,12 @@ export class Workspace {
     content: string,
     subDir = ""
   ): Promise<void> {
-    await this.chownWorkspaceAll();
-
     const fullPath = path.join(this.projectPath, subDir, filename);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, content, "utf-8");
   }
 
   async readFiles(filenames: string[]): Promise<Record<string, string>> {
-    await this.chownWorkspaceAll();
-
     const contents: Record<string, string> = {};
     for (const filename of filenames) {
       const fullPath = Workspace.getResolvePathSafe(this.projectPath, filename);
