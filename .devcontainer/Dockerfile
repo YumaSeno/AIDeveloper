@@ -45,4 +45,4 @@ WORKDIR $CONTAINER_WORKDIR
 
 RUN usermod -aG docker $CONTAINER_USER
 
-CMD ["/bin/sh -c 'sudo service docker start && /bin/bash'"]
+CMD ["sudo service docker start; /bin/bash"]
