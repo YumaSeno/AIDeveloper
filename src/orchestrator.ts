@@ -43,7 +43,10 @@ export class Orchestrator {
     this.workspace = workspace;
     this.ui.displayStatus(`📂 ワークスペース: ${this.workspace.projectPath}`);
 
-    const metaDir = path.join(this.workspace.projectPath, META_DIR);
+    const metaDir = Workspace.getResolvePathSafe(
+      this.workspace.projectPath,
+      META_DIR
+    );
     await fs.mkdir(metaDir, { recursive: true });
     this.logger = new Logger(
       metaDir,
@@ -60,7 +63,7 @@ export class Orchestrator {
       this.ui.displayStatus("🔄 プロジェクトの状態を復元中...");
       await this.logger.loadFromFile();
 
-      const planPath = path.join(metaDir, PLAN_FILE);
+      const planPath = Workspace.getResolvePathSafe(metaDir, PLAN_FILE);
       try {
         await fs.access(planPath);
         const planData = await fs.readFile(planPath, "utf-8");

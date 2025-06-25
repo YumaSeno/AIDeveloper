@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { TurnOutput, ToolResult, ToolResultSchema } from "../models";
 import { z } from "zod";
+import { Workspace } from "./Workspace";
 
 export class Logger {
   private readonly logFilePath: string;
@@ -13,7 +14,10 @@ export class Logger {
     mode: "w" | "a" = "w",
     turnOutputSchema: z.ZodTypeAny
   ) {
-    this.logFilePath = path.join(logDir, "00_Project_Log.jsonl");
+    this.logFilePath = Workspace.getResolvePathSafe(
+      logDir,
+      "00_Project_Log.jsonl"
+    );
     if (mode === "w") {
       // ファイルを空にする
       fs.writeFile(this.logFilePath, "").catch((e) => {

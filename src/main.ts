@@ -54,8 +54,8 @@ async function main() {
         new FileWriterTool(workspace),
         new WebSearchTool(),
         new GetHttpContentsTool(client, model_name),
-        new ShellCommandTool(path.resolve(workspace.projectPath)),
-        new GetImageTool(path.resolve(workspace.projectPath)),
+        new ShellCommandTool(workspace.projectPath),
+        new GetImageTool(workspace),
       ]);
       const initialSpeaker = await orchestrator.setupProject(
         projectName,

@@ -6,6 +6,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as fsp from "fs/promises";
 import path from "path";
+import { Workspace } from "../core/Workspace";
 
 const execAsync = promisify(exec);
 
@@ -73,7 +74,6 @@ export class ShellCommandTool extends ToolWithGenerics<
   private readonly hostWorkspacePath: string;
   private commandHistory: CommandHistoryItem[] = [];
   private historyLoaded = false;
-  private isShuttingDown = false;
 
   private readonly identityFilePath: string;
   private readonly containerName: string;
@@ -81,17 +81,32 @@ export class ShellCommandTool extends ToolWithGenerics<
 
   private readonly commandTimeout: number;
 
+  private readonly dockerfilePath: string = Workspace.getResolvePathSafe(
+    "src/tools/ShellCommandTool"
+  );
+  private baseImageName: string = "docker:dind"; // デフォルトのベースイメージ
+
   constructor(projectPath: string, commandTimeout: number = 30000) {
     super({
       description:
-        "シェルコマンドを実行、または実行履歴を確認します。コマンドは現在の作業フォルダを/workspaceにマウントしたDockerコンテナの中で実行されます。コンテナのイメージは「ubuntu:latest」です。コンテナはセッション中維持され、プロセス終了時に状態が保存されます。",
+        "シェルコマンドを実行、または実行履歴を確認します。コマンドは現在の作業フォルダを/workspaceにマウントしたDockerコンテナの中で実行されます。コンテナのイメージは「docker:dind」で、Alpine Linuxがベースです。",
       argsSchema: ShellCommandToolArgsSchema,
       returnSchema: ShellCommandToolReturnSchema,
     });
-    const containerMetaPath = path.join(projectPath, "_meta", "container");
-    this.tarballPath = path.join(containerMetaPath, "container_state.tar");
-    this.logFilePath = path.join(containerMetaPath, "container_log.json");
-    this.identityFilePath = path.join(
+    const containerMetaPath = Workspace.getResolvePathSafe(
+      projectPath,
+      "_meta",
+      "container"
+    );
+    this.tarballPath = Workspace.getResolvePathSafe(
+      containerMetaPath,
+      "container_state.tar"
+    );
+    this.logFilePath = Workspace.getResolvePathSafe(
+      containerMetaPath,
+      "container_log.json"
+    );
+    this.identityFilePath = Workspace.getResolvePathSafe(
       containerMetaPath,
       "container_identity.json"
     );
@@ -108,11 +123,7 @@ export class ShellCommandTool extends ToolWithGenerics<
         err
       );
     });
-
-    this.registerShutdownHook();
   }
-
-  // (以下、loadOrInitializeContainerIdentityから_createAndStartContainerまでは変更なし)
 
   private loadOrInitializeContainerIdentity(): ContainerIdentity {
     try {
@@ -160,21 +171,6 @@ export class ShellCommandTool extends ToolWithGenerics<
     return newIdentity;
   }
 
-  private registerShutdownHook(): void {
-    const shutdownHandler = async () => {
-      if (this.isShuttingDown) return;
-      this.isShuttingDown = true;
-      console.log(
-        "プロセス終了シグナルを検知しました。クリーンアップ処理を開始します..."
-      );
-      await this.shutdown();
-      process.exit(0);
-    };
-
-    process.on("SIGINT", shutdownHandler);
-    process.on("SIGTERM", shutdownHandler);
-  }
-
   private async cleanupLingeringResources(): Promise<void> {
     try {
       console.log(
@@ -188,16 +184,6 @@ export class ShellCommandTool extends ToolWithGenerics<
           `残存コンテナ ${containerId.trim()} が見つかりました。強制的に削除します。`
         );
         await execAsync(`docker rm --force ${containerId.trim()}`);
-      }
-
-      const { stdout: imageId } = await execAsync(
-        `docker images -q ${this.committedImageName}`
-      );
-      if (imageId) {
-        console.log(
-          `残存イメージ ${this.committedImageName} が見つかりました。削除します。`
-        );
-        await execAsync(`docker rmi --force ${imageId.trim()}`);
       }
     } catch (error) {
       console.warn(
@@ -271,17 +257,104 @@ export class ShellCommandTool extends ToolWithGenerics<
     }
   }
 
+  private async _saveContainerState(): Promise<void> {
+    if (!this.containerId) {
+      console.warn(
+        "コンテナIDが存在しないため、コンテナの状態を保存できません。"
+      );
+      return;
+    }
+    try {
+      console.log(`現在のコンテナの状態を保存しています...`);
+
+      await execAsync(`docker rmi --force ${this.committedImageName}`).catch(
+        () => {}
+      );
+
+      console.log(
+        `コンテナ'${this.containerId}'をイメージ'${this.committedImageName}'にコミットします...`
+      );
+      await execAsync(
+        `docker commit ${this.containerId} ${this.committedImageName}`
+      );
+
+      console.log(`イメージを'${this.tarballPath}'に保存します...`);
+      await fsp.mkdir(path.dirname(this.tarballPath), { recursive: true });
+      await execAsync(
+        `docker save -o ${this.tarballPath} ${this.committedImageName}`
+      );
+
+      console.log(`コンテナの状態が正常に保存されました。`);
+    } catch (error) {
+      console.error(`コンテナの状態保存中にエラーが発生しました。`, error);
+    }
+  }
+
+  /**
+   * Dockerfileが存在する場合、テンプレートイメージをビルドまたは準備します。
+   */
+  private async _prepareBaseImage(): Promise<void> {
+    const dockerfileName = Workspace.getResolvePathSafe(
+      this.dockerfilePath,
+      "Dockerfile"
+    );
+    if (!fs.existsSync(dockerfileName)) {
+      console.log(
+        `Dockerfileが見つかりません。デフォルトの'${this.baseImageName}'イメージを使用します。`
+      );
+      return;
+    }
+
+    try {
+      const fileBuffer = await fsp.readFile(dockerfileName);
+      const hashSum = crypto.createHash("sha256");
+      hashSum.update(fileBuffer);
+      const dockerfileHash = hashSum.digest("hex").substring(0, 16);
+      const templateImageName = `ai-agent-base:${dockerfileHash}`;
+
+      console.log(
+        `Dockerfileを検出しました。テンプレートイメージ名: ${templateImageName}`
+      );
+
+      const { stdout: imageId } = await execAsync(
+        `docker images -q ${templateImageName}`
+      );
+
+      if (imageId) {
+        console.log(
+          `既存のテンプレートイメージ'${templateImageName}'を使用します。`
+        );
+        this.baseImageName = templateImageName;
+      } else {
+        console.log(
+          `テンプレートイメージ'${templateImageName}'をビルドします...`
+        );
+        await execAsync(
+          `docker build -t ${templateImageName} ${this.dockerfilePath}`
+        );
+        console.log(`テンプレートイメージのビルドが完了しました。`);
+        this.baseImageName = templateImageName;
+      }
+    } catch (error) {
+      console.error(
+        `Dockerfileからのイメージビルドに失敗しました。デフォルトの'docker:dind'イメージにフォールバックします。`,
+        error
+      );
+      this.baseImageName = "docker:dind";
+    }
+  }
+
   private async _createAndStartContainer(): Promise<void> {
     if (this.containerId) return;
-
     if (!this.historyLoaded) await this._loadHistory();
 
     const dockerRunOptions = [
-      "-d",
+      `-it`,
+      `-d`,
       `--name ${this.containerName}`,
       `-v ${this.hostWorkspacePath}:/workspace`,
       `-w /workspace`,
-      "--entrypoint tail",
+      `--privileged`,
     ].join(" ");
 
     if (fs.existsSync(this.tarballPath)) {
@@ -294,34 +367,41 @@ export class ShellCommandTool extends ToolWithGenerics<
           `ロードしたイメージ'${this.committedImageName}'からコンテナを作成・起動します...`
         );
         const { stdout: newContainerId } = await execAsync(
-          `docker run ${dockerRunOptions} ${this.committedImageName} -f /dev/null`
+          `docker run ${dockerRunOptions} ${this.committedImageName}`
         );
         this.containerId = newContainerId.trim();
         console.log(`コンテナが復元・起動されました。ID: ${this.containerId}`);
+
+        // コンテナ内のDockerが起動していない可能性があるため
+        await new Promise((res) => setTimeout(res, 3000));
         return;
       } catch (error) {
         console.warn(
           `tarファイルからのコンテナ復元に失敗しました。新しいコンテナを作成します。`,
           error
         );
-        await execAsync(`docker rm --force ${this.containerName}`).catch(
-          () => {}
-        );
+        await this.shutdown().catch(() => {});
         await execAsync(`docker rmi --force ${this.committedImageName}`).catch(
           () => {}
         );
       }
     }
 
+    // 新規コンテナ作成のロジック
+    await this._prepareBaseImage();
+
     try {
       console.log(
-        `基本イメージ'ubuntu:latest'からコンテナを新規に作成・起動します...`
+        `ベースイメージ'${this.baseImageName}'からコンテナを新規に作成・起動します...`
       );
       const { stdout: newContainerId } = await execAsync(
-        `docker run ${dockerRunOptions} ubuntu:latest -f /dev/null`
+        `docker run ${dockerRunOptions} ${this.baseImageName}`
       );
       this.containerId = newContainerId.trim();
       console.log(`コンテナが新規に作成されました。ID: ${this.containerId}`);
+
+      // コンテナ内のDockerが起動していない可能性があるため
+      await new Promise((res) => setTimeout(res, 3000));
     } catch (error) {
       console.error(`Dockerコンテナの作成に失敗しました。`, error);
       throw new Error(
@@ -335,7 +415,7 @@ export class ShellCommandTool extends ToolWithGenerics<
   public async shutdown(): Promise<void> {
     console.log(`シャットダウン処理を実行します...`);
     if (!this.containerId) {
-      console.warn(
+      console.log(
         "クリーンアップ対象のコンテナIDがありません。処理をスキップします。"
       );
       return;
@@ -343,37 +423,11 @@ export class ShellCommandTool extends ToolWithGenerics<
     const tempContainerId = this.containerId;
     this.containerId = null;
     try {
-      console.log(
-        `コンテナ'${tempContainerId}'の状態をイメージ'${this.committedImageName}'にコミットします...`
-      );
-      await execAsync(
-        `docker commit ${tempContainerId} ${this.committedImageName}`
-      );
-      console.log(`イメージを'${this.tarballPath}'に保存します...`);
-      await fsp.mkdir(path.dirname(this.tarballPath), { recursive: true });
-      await execAsync(
-        `docker save -o ${this.tarballPath} ${this.committedImageName}`
-      );
-      console.log(`コンテナの状態は正常に保存されました。`);
+      console.log(`コンテナ'${tempContainerId}'を停止・削除しています...`);
+      await execAsync(`docker rm --force ${tempContainerId}`);
+      console.log(`コンテナは正常に削除されました。`);
     } catch (error) {
-      console.error(`コンテナの状態保存中にエラーが発生しました。`, error);
-    } finally {
-      try {
-        console.log(`コンテナ'${tempContainerId}'を停止・削除しています...`);
-        await execAsync(`docker rm --force ${tempContainerId}`);
-        console.log(`コンテナは正常に削除されました。`);
-      } catch (error) {
-        console.warn(`コンテナの削除中に警告が発生しました。`, error);
-      }
-      try {
-        console.log(
-          `中間イメージ'${this.committedImageName}'を削除しています...`
-        );
-        await execAsync(`docker rmi ${this.committedImageName}`);
-        console.log(`中間イメージは正常に削除されました。`);
-      } catch (error) {
-        console.warn(`中間イメージの削除中に警告が発生しました。`, error);
-      }
+      console.warn(`コンテナの削除中にエラーが発生しました。`, error);
     }
   }
 
@@ -429,7 +483,6 @@ export class ShellCommandTool extends ToolWithGenerics<
         );
       }
 
-      // タイムアウト以外の通常のエラー処理
       const exitCode = typeof error.code === "number" ? error.code : 1;
       const combinedOutput =
         (error.stdout ? `STDOUT:\n${error.stdout}` : "") +
@@ -443,6 +496,15 @@ export class ShellCommandTool extends ToolWithGenerics<
 
     this.commandHistory.push(result);
     await this._saveHistory();
+
+    if (result.exitCode === 0) {
+      await this._saveContainerState();
+    } else {
+      console.warn(
+        `コマンドが失敗したため(Exit Code: ${result.exitCode})、コンテナの状態は保存されませんでした。`
+      );
+    }
+
     return result;
   }
 }

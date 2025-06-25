@@ -1,7 +1,6 @@
 import { ToolWithGenerics } from "./Tool";
 import { z } from "zod";
-import * as path from "path";
-import * as fs from "node:fs";
+import { Workspace } from "../core/Workspace";
 
 // ツールが受け取る引数のスキーマ定義
 const GetImageToolArgsSchema = z.object({
@@ -28,19 +27,16 @@ export class GetImageTool extends ToolWithGenerics<
   GetImageToolReturn
 > {
   // このツールが動作する基準となるワークスペースのパス
-  protected readonly workspacePath: string;
+  protected readonly workspace: Workspace;
 
-  /**
-   * @param workspacePath AIエージェントがファイルを読み書きできるワークスペースの絶対パス
-   */
-  constructor(workspacePath: string) {
+  constructor(workspace: Workspace) {
     super({
       description:
         "画像ファイルの存在を確認し、そのパスを取得します。(想定利用方法：ShellCommandToolにてヘッドレスChromeでスクリーンショットを保存後、それを確認する。)",
       argsSchema: GetImageToolArgsSchema,
       returnSchema: GetImageToolReturnSchema,
     });
-    this.workspacePath = path.resolve(workspacePath);
+    this.workspace = workspace;
   }
 
   omitArgs(args: GetImageToolArgs): GetImageToolArgs {
@@ -65,21 +61,8 @@ export class GetImageTool extends ToolWithGenerics<
       );
     }
 
-    // ワークスペースからの相対パスと結合して、ファイルの絶対パスを生成
-    // path.joinだけだと'../'のようなトラバーサル攻撃に脆弱なため、resolveで正規化する
-    const absolutePath = path.resolve(this.workspacePath, args.filePath);
-
-    // セキュリティチェック：解決されたパスがワークスペースディレクトリ内にあることを確認
-    if (!absolutePath.startsWith(this.workspacePath)) {
-      throw new Error(
-        `不正なファイルパスです。ワークスペース外のディレクトリにはアクセスできません。`
-      );
-    }
-
     try {
-      const base64ImageFile = fs.readFileSync(absolutePath, {
-        encoding: "base64",
-      });
+      const base64ImageFile = this.workspace.getImageBase64(args.filePath);
 
       // 成功した場合、AIエージェントにファイルが利用可能であることを伝えるメッセージを返す
       return base64ImageFile;

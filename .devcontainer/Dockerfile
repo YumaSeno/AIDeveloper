@@ -1,6 +1,33 @@
 FROM node:24-slim
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NOWARNINGS=yes
 
-RUN apt update && apt install -y sudo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  sudo \
+  ca-certificates \
+  curl \
+  gnupg \
+  lsb-release
+
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+RUN echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  sudo \
+  ca-certificates \
+  curl \
+  gnupg \
+  lsb-release \
+  locales-all \
+  git \
+  docker-ce \
+  docker-ce-cli \
+  docker-buildx-plugin \
+  containerd.io \
+  docker-compose-plugin \
+  jq
 
 ARG CONTAINER_USER
 ENV CONTAINER_USER=$CONTAINER_USER
@@ -16,25 +43,6 @@ ARG CONTAINER_WORKDIR
 ENV CONTAINER_WORKDIR=$CONTAINER_WORKDIR
 WORKDIR $CONTAINER_WORKDIR
 
-#Dockerを用意する(docker-in-docker)
-RUN apt update
-RUN apt install -y locales-all
-RUN apt install -y ca-certificates
-RUN apt install -y curl
-RUN apt install -y gnupg
-RUN apt install -y lsb-release
-
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-RUN echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-RUN apt update
-RUN apt install -y docker-ce
-RUN apt install -y docker-ce-cli
-RUN apt install -y containerd.io
-RUN apt install -y docker-compose-plugin
-
 RUN usermod -aG docker $CONTAINER_USER
 
-CMD ["sudo service docker start; /bin/bash"]
+CMD ["/bin/sh -c 'sudo service docker start && /bin/bash'"]
