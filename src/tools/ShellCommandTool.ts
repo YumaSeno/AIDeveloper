@@ -76,8 +76,8 @@ export class ShellCommandTool extends ToolWithGenerics<
   private historyLoaded = false;
 
   private readonly identityFilePath: string;
-  private readonly containerName: string;
-  private readonly committedImageName: string;
+  private containerName: string;
+  private committedImageName: string;
 
   private readonly commandTimeout: number;
 
@@ -88,8 +88,8 @@ export class ShellCommandTool extends ToolWithGenerics<
 
   constructor(projectPath: string, commandTimeout: number = 30000) {
     super({
-      description:
-        "シェルコマンドを実行、または実行履歴を確認します。コマンドは現在の作業フォルダを/workspaceにマウントしたDockerコンテナの中で実行されます。コンテナのイメージは「docker:dind」で、Alpine Linuxがベースです。",
+      description: `シェルコマンドを実行、または実行履歴を確認します。コマンドは現在の作業フォルダを/workspaceにマウントしたコンテナの中で実行されます。(コンテナのイメージは「docker:dind」で、Alpine Linuxがベースです。)
+        コンテナ内でDockerコマンドを利用できますが、稀にDockerデーモンが停止する場合があります。その場合は'dockerd-entrypoint.sh'を--detachオプション付きで実行して下さい。`,
       argsSchema: ShellCommandToolArgsSchema,
       returnSchema: ShellCommandToolReturnSchema,
     });
@@ -464,6 +464,11 @@ export class ShellCommandTool extends ToolWithGenerics<
         "実行するコマンドが空です。'EXECUTE'モードでは`command`を指定する必要があります。"
       );
     }
+
+    const identity = this.loadOrInitializeContainerIdentity();
+    this.containerName = identity.containerName;
+    this.committedImageName = identity.committedImageName;
+
     if (!this.containerId) await this._createAndStartContainer();
     if (!this.containerId) throw new Error("コンテナの起動に失敗しました。");
 
