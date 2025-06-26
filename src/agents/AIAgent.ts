@@ -105,38 +105,29 @@ export class AIAgent extends Agent {
     let base64ImageFile: string | undefined;
 
     const historyForPrompt = personalHistory.map((turn) => {
+      const passedTurns =
+        personalHistory.length - personalHistory.indexOf(turn);
       const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
-      // 画像データの扱いだけ特殊
-      if ("tool_name" in turnobj && turnobj.tool_name == "GetImageTool") {
-        if (!turnobj.error) {
-          if (personalHistory.indexOf(turn) == personalHistory.length - 1) {
-            base64ImageFile = turnobj.result;
-            turnobj.result = "取得できました。画像データを添付しています。";
-          } else {
-            turnobj.result =
-              "取得できましたが、画像データは1度のみ保持されます。";
-          }
-        }
-        return turnobj;
-      }
 
-      // 直近20回の履歴であればファイル内容等もログに含める。
-      if (personalHistory.indexOf(turn) > personalHistory.length - 21) {
-        return turnobj;
-      }
-
-      // それ以前の履歴は省略する
+      // 履歴の情報を省略する
       if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
         const tool_args: { [key: string]: any } = turnobj.tool_args;
         tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
+          passedTurns,
           tool_args[turnobj.recipient]
         );
         turnobj.tool_args = tool_args;
       }
-      if ("tool_name" in turnobj && !turnobj.error)
+      if ("tool_name" in turnobj && !turnobj.error) {
+        // 画像データの扱いだけ特殊
+        if (turnobj.tool_name == "GetImageTool" && passedTurns == 1) {
+          base64ImageFile = turnobj.result;
+        }
         turnobj.result = toolRecord[turnobj.tool_name].omitResult(
+          passedTurns,
           turnobj.result
         );
+      }
       return turnobj;
     });
     return {

@@ -35,11 +35,12 @@ export class FileReaderTool extends ToolWithGenerics<
     this.workspace = workspace;
   }
 
-  omitArgs(args: FileReaderArgs): FileReaderArgs {
+  omitArgs(passedTurns: number, args: FileReaderArgs): FileReaderArgs {
     return args;
   }
 
-  omitResult(result: FileReaderReturn): FileReaderReturn {
+  omitResult(passedTurns: number, result: FileReaderReturn): FileReaderReturn {
+    if (passedTurns < 5) return result;
     const omitted: FileReaderReturn = { ...result };
     for (const key in omitted) {
       omitted[key] = "(省略)";

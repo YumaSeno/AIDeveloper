@@ -39,12 +39,16 @@ export class GetImageTool extends ToolWithGenerics<
     this.workspace = workspace;
   }
 
-  omitArgs(args: GetImageToolArgs): GetImageToolArgs {
+  omitArgs(passedTurns: number, args: GetImageToolArgs): GetImageToolArgs {
     return args;
   }
 
-  omitResult(result: GetImageToolReturn): string {
-    return "（省略）";
+  omitResult(passedTurns: number, result: GetImageToolReturn): string {
+    if (passedTurns == 1) {
+      return "取得できました。画像データを添付しています。";
+    } else {
+      return "取得できましたが、画像データは1度のみ保持されます。";
+    }
   }
 
   /**

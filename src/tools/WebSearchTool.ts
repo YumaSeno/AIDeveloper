@@ -176,12 +176,16 @@ export class WebSearchTool extends ToolWithGenerics<
     });
   }
 
-  omitArgs(args: WebSearchToolArgs): WebSearchToolArgs {
+  omitArgs(passedTurns: number, args: WebSearchToolArgs): WebSearchToolArgs {
     return args;
   }
 
-  omitResult(result: WebSearchToolReturn): WebSearchToolReturn {
-    return result;
+  omitResult(
+    passedTurns: number,
+    result: WebSearchToolReturn
+  ): WebSearchToolReturn {
+    if (passedTurns < 5 || "string" == typeof result) return result;
+    return result.map((result) => ({ ...result, snippet: "省略" }));
   }
 
   protected async _executeTool(
@@ -195,9 +199,10 @@ export class WebSearchTool extends ToolWithGenerics<
       await new Promise((res) =>
         setTimeout(res, this.getRandomArbitrary(15000, 30000))
       ); // 連続でリクエストを送るとコンピュータであると認識される可能性があるため。
+      if (searchResults.length == 0) return "結果が取得できませんでした。";
       return searchResults;
     } catch (error) {
-      return "ツールの利用時にエラーが発生しました。";
+      throw "ツールの利用時にエラーが発生しました。";
     }
   }
 

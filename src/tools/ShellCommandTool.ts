@@ -193,27 +193,48 @@ export class ShellCommandTool extends ToolWithGenerics<
     }
   }
 
-  omitArgs(args: ShellCommandToolArgs): ShellCommandToolArgs {
+  omitArgs(
+    passedTurns: number,
+    args: ShellCommandToolArgs
+  ): ShellCommandToolArgs {
     return args;
   }
 
-  omitResult(result: ShellCommandToolReturn): ShellCommandToolReturn {
+  omitResult(
+    passedTurns: number,
+    result: ShellCommandToolReturn
+  ): ShellCommandToolReturn {
     if (Array.isArray(result)) {
       return result.map((item) => {
-        if (item.output.length > 500) {
+        if (item.output.length > 200) {
+          if (passedTurns > 10)
+            return {
+              ...item,
+              output: "(省略)",
+            };
           return {
             ...item,
-            output: item.output.substring(0, 500) + "\n... (省略)",
+            output:
+              item.output.substring(0, 100) +
+              "\n... (省略) ...\n" +
+              item.output.substring(item.output.length - 100),
           };
         }
         return item;
       });
     } else if (typeof result === "object" && "output" in result) {
-      if (result.output.length > 2000) {
+      if (result.output.length > 800) {
+        if (passedTurns > 10)
+          return {
+            ...result,
+            output: "(省略)",
+          };
         return {
           ...result,
           output:
-            result.output.substring(0, 2000) + "\n... (結果が長すぎるため省略)",
+            result.output.substring(0, 400) +
+            "\n... (結果が長すぎるため省略) ...\n" +
+            result.output.substring(result.output.length - 400),
         };
       }
     }

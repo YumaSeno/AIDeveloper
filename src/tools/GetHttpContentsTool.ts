@@ -43,11 +43,15 @@ export class GetHttpContentsTool extends ToolWithGenerics<
     this.modelName = modelName;
   }
 
-  omitArgs(args: GetHttpContentsToolArgs): GetHttpContentsToolArgs {
+  omitArgs(
+    passedTurns: number,
+    args: GetHttpContentsToolArgs
+  ): GetHttpContentsToolArgs {
     return args;
   }
 
-  omitResult(result: string): string {
+  omitResult(passedTurns: number, result: string): string {
+    if (passedTurns < 5) return result;
     return "（省略）";
   }
 

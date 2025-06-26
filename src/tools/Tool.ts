@@ -10,8 +10,8 @@ export abstract class ToolWithGenerics<T, U> {
   readonly returnSchema: z.ZodTypeAny;
 
   protected abstract _executeTool(args: T): Promise<U>;
-  abstract omitArgs(args: T): T;
-  abstract omitResult(result: U): U;
+  abstract omitArgs(passedTurns: number, args: T): T;
+  abstract omitResult(passedTurns: number, result: U): U;
 
   constructor(args: {
     description: string;

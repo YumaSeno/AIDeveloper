@@ -38,7 +38,8 @@ export class FileWriterTool extends ToolWithGenerics<
     this.workspace = workspace;
   }
 
-  omitArgs(args: FileWriterArgs): FileWriterArgs {
+  omitArgs(passedTurns: number, args: FileWriterArgs): FileWriterArgs {
+    if (passedTurns < 5) return args;
     const omitted: FileWriterArgs = JSON.parse(JSON.stringify(args));
     omitted.artifacts = omitted.artifacts.map((t) => ({
       filename: t.filename,
@@ -47,7 +48,7 @@ export class FileWriterTool extends ToolWithGenerics<
     return omitted;
   }
 
-  omitResult(result: string): string {
+  omitResult(passedTurns: number, result: string): string {
     return result;
   }
 
