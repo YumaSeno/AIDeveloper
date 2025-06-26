@@ -97,6 +97,7 @@ export class AIAgent extends Agent {
     tools: Tool[]
   ): {
     historyForPrompt: (TurnOutput | ToolResult)[];
+    things_to_keep_in_mind: string | undefined;
     base64ImageFile: string | undefined;
   } {
     const toolRecord: Record<string, Tool> = {};
@@ -104,21 +105,30 @@ export class AIAgent extends Agent {
 
     let base64ImageFile: string | undefined;
 
+    let things_to_keep_in_mind_latest: string | undefined;
+
     const historyForPrompt = personalHistory.map((turn) => {
       const passedTurns =
         personalHistory.length - personalHistory.indexOf(turn);
-      const turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
+      let turnobj: TurnOutput | ToolResult = JSON.parse(JSON.stringify(turn));
 
       // 履歴の情報を省略する
-      if ("target_type" in turnobj && turnobj.target_type === "TOOL") {
-        const tool_args: { [key: string]: any } = turnobj.tool_args;
-        tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
-          passedTurns,
-          tool_args[turnobj.recipient]
-        );
-        turnobj.tool_args = tool_args;
-      }
-      if ("tool_name" in turnobj && !turnobj.error) {
+      if ("target_type" in turnobj) {
+        if (turnobj.target_type === "TOOL") {
+          const tool_args: { [key: string]: any } = turnobj.tool_args;
+          tool_args[turnobj.recipient] = toolRecord[turnobj.recipient].omitArgs(
+            passedTurns,
+            tool_args[turnobj.recipient]
+          );
+          turnobj.tool_args = tool_args;
+        }
+        // 自分の意識していることを抽出、過去のものは削除
+        const { things_to_keep_in_mind, ...turnobj_formatted } = turnobj;
+        if (turnobj.recipient == this.name) {
+          things_to_keep_in_mind_latest = things_to_keep_in_mind;
+        }
+        return turnobj_formatted;
+      } else if (!turnobj.error) {
         // 画像データの扱いだけ特殊
         if (turnobj.tool_name == "GetImageTool" && passedTurns == 1) {
           base64ImageFile = turnobj.result;
@@ -127,11 +137,13 @@ export class AIAgent extends Agent {
           passedTurns,
           turnobj.result
         );
+        return turnobj;
       }
       return turnobj;
     });
     return {
       historyForPrompt: historyForPrompt,
+      things_to_keep_in_mind: things_to_keep_in_mind_latest,
       base64ImageFile: base64ImageFile,
     };
   }
@@ -152,6 +164,7 @@ export class AIAgent extends Agent {
 
     const organized = this.organizeHistory(personalHistory, tools);
     let base64ImageFile = organized.base64ImageFile;
+    let things_to_keep_in_mind = organized.things_to_keep_in_mind;
     const historyForPrompt = organized.historyForPrompt;
 
     const prompt = `あなたは自律型開発チームの一員です。
@@ -162,6 +175,9 @@ export class AIAgent extends Agent {
       this.detailedInstructions
     }
 
+
+【自分が意識していること、今後意識すべきこと、注意点や次にすべき行動】(前回実行時のあなた自身からの指示): 
+${things_to_keep_in_mind}
 
 【タスク】
 あなたの役割に基づき、次に行うべきアクションを決定してください。

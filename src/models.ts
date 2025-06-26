@@ -29,6 +29,12 @@ const TurnOutputSchema = z.object({
     .describe(
       "対象がツールの場合に、ツールに渡す引数をキーと値のペアで指定。ツールでない場合は設定しない。"
     ),
+  things_to_keep_in_mind: z
+    .string()
+    .optional()
+    .describe(
+      "自分が意識していること、今後意識すべきこと。何か注意点や次にすべき行動などがあれば設定する。"
+    ),
 });
 const TurnOutputSchemaObjectToolArgs = TurnOutputSchema.extend({
   tool_args: z.object({}),
